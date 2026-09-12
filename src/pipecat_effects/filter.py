@@ -19,25 +19,20 @@ SETTING = "effects"  # update frame key of a new chain
 
 
 class EffectsFilter(BaseAudioFilter):
-    """Shapes spoken audio. It adds 0 samples of latency."""
+    """Shapes spoken audio. It adds 0 samples of latency and runs on mono."""
 
-    def __init__(self, effects: Sequence[Effect], *, channels: int = 1) -> None:
+    def __init__(self, effects: Sequence[Effect]) -> None:
         self.meter = Meter()
         self._effects = _limited(effects)
-        self._channels = channels
         self._rate = 0
         self._chain: list[Apply] = []
         self._fading: list[Apply] = []
         self._enabled = True
-        self._quiet = False
 
     async def start(self, sample_rate: int) -> None:
-        """Builds the chain. Over 1 channel raises."""
-        if self._channels != 1:
-            raise ValueError(f"channels: expected 1, got {self._channels} channels")
+        """Builds the chain at this rate."""
         self._rate = sample_rate
         self._chain = [effect.start(sample_rate) for effect in self._effects]
-        self._quiet = False
         self.meter.start(sample_rate)
 
     async def stop(self) -> None:
@@ -52,19 +47,16 @@ class EffectsFilter(BaseAudioFilter):
             self._update(frame.settings)
 
     async def filter(self, audio: bytes) -> bytes:
-        """Runs one mono int16 chunk, gives int16 bytes."""
-        taken = np.frombuffer(audio, dtype=np.int16)
-        if self._quiet and not taken.any():
-            self.meter.quiet(taken.size)
+        """Runs one mono int16 chunk, silence included. Gives int16 bytes."""
+        taken = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / SCALE
+        if not taken.size:
             return audio
-        given = self._chunk(taken.astype(np.float32) / SCALE)
+        given = self._chunk(taken)
         self.meter.write(given)
-        sent = np.clip(np.rint(given * SCALE), -SCALE, TOP).astype(np.int16)
-        self._quiet = not sent.any()
-        return sent.tobytes()
+        return np.clip(np.rint(given * SCALE), -SCALE, TOP).astype(np.int16).tobytes()
 
     def _chunk(self, x: Samples) -> Samples:
-        """Runs the chain. One chunk fades on update."""
+        """Runs the chain. Update fades over 1 chunk."""
         if not self._enabled:
             return x
         given = _through(self._chain, x)
@@ -76,16 +68,15 @@ class EffectsFilter(BaseAudioFilter):
         return faded * (1.0 - ramp) + given * ramp
 
     def _update(self, settings: Mapping[str, Any]) -> None:
-        """Builds one chain, keeps the old to fade."""
+        """Builds one chain, keeps its old one to fade."""
         effects = settings.get(SETTING)
         if effects is None:
             return
-        self._effects = _limited(effects)
+        self._effects = _limited(_sequence(effects))
         if not self._rate:
             return
         self._fading = self._chain
         self._chain = [effect.start(self._rate) for effect in self._effects]
-        self._quiet = False
 
 
 def _through(chain: Sequence[Apply], x: Samples) -> Samples:
@@ -100,3 +91,15 @@ def _limited(effects: Sequence[Effect]) -> tuple[Effect, ...]:
     if effects and isinstance(effects[-1], Limiter):
         return tuple(effects)
     return (*effects, Limiter())
+
+
+def _sequence(effects: Any) -> Sequence[Effect]:
+    """Refuses one update payload outside a sequence of effects."""
+    if isinstance(effects, str | bytes) or not isinstance(effects, Sequence):
+        raise ValueError(
+            f"{SETTING}: expected a sequence of effects, got one {type(effects).__name__}"
+        )
+    outside = sum(1 for effect in effects if not hasattr(effect, "start"))
+    if outside:
+        raise ValueError(f"{SETTING}: expected each item to give start, got {outside} without it")
+    return effects

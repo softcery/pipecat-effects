@@ -2,6 +2,7 @@
 
 Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One filter, 8 effects,
 3 presets and one loudness meter. The chain is causal and adds 0 samples of latency.
+The package ships a `py.typed` marker.
 
 Tested with pipecat-ai 1.10.0, numpy 2.5.3, scipy 1.18.1 on Python 3.14.
 
@@ -24,9 +25,12 @@ def transport_params() -> TransportParams:
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_out_mixer=FilterMixer(EffectsFilter(WARM)),
+        audio_out_mixer=FilterMixer(EffectsFilter(WARM), channels=1),
     )
 ```
+
+`FilterMixer` takes the channel count of the transport params. `start` raises on more than 1
+channel.
 
 Build one filter per session. Each effect holds its state across chunks.
 
@@ -61,7 +65,7 @@ both as `MixerEnableFrame` and `MixerUpdateSettingsFrame`.
 
 `EffectsFilter.meter.read()` gives the K-weighted loudness in LUFS and the true peak in dBTP of
 the output since the last read, then clears both. The true peak runs on 4 times oversampling with
-48 taps.
+48 taps. `FilterMixer.read()` gives the same pair as a mapping, and gives no field on silence.
 
 ## Cost
 
@@ -70,24 +74,25 @@ One 20 ms chunk at 24 kHz, warm preset, mean of 1000 chunks on one x86-64 workst
 
 | path | mean | 95th |
 | --- | --- | --- |
-| filter, 20 ms chunk | 0.306 ms | 0.314 ms |
-| mixer on silence, 10 ms chunk | 0.0014 ms | 0.0014 ms |
-| true peak, 10 ms chunk | 0.0095 ms | 0.0097 ms |
-| loudness and true peak, 10 ms chunk | 0.050 ms | 0.053 ms |
+| filter, 20 ms chunk | 0.260 ms | 0.323 ms |
+| mixer on silence, 10 ms chunk | 0.235 ms | 0.295 ms |
+| true peak, 10 ms chunk | 0.0099 ms | 0.0120 ms |
+| loudness and true peak, 10 ms chunk | 0.034 ms | 0.042 ms |
 
-`bench.py --out rows.jsonl` writes one row.
+`bench.py --out rows.jsonl --sha <commit>` writes one row.
 
 ## Limits
 
-- The filter runs on mono. `start` raises on more than 1 channel.
-- A silent chunk that follows a silent output returns unchanged. The chain runs until its own
-  output reaches int16 silence, so a reverb tail finishes.
+- The filter runs on mono. `FilterMixer.start` raises on more than 1 channel.
+- The chain runs on every chunk, silence included, so each follower keeps its time. One idle
+  session costs 100 silent chunks a second.
 - `AGC` reads momentary loudness without the gate of BS.1770. Under -50 LUFS the gain holds.
 - The limiter bounds sample peaks. The -1 dB ceiling leaves the margin for inter-sample peaks at
   a codec resampler. The true peak meter reports, it does not bound.
-- A `Biquad` centre over 0.45 of the sample rate clamps to that bound.
-- One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.6 dB at a
+- A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the bound and the rate.
+- One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
   24 kHz rate.
+- A chunk of 0 samples passes through. The primitives need 1 sample or more.
 - `Reverb` takes `decay_ms` to 500. A hall needs convolution and stays out.
 - Pitch, formant, lookahead and convolution stay out.
 

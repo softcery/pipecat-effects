@@ -9,16 +9,13 @@ from typing import Protocol
 
 import numpy as np
 
-from pipecat_effects.primitives import KINDS, Envelope, Line, Samples, Section
+from pipecat_effects.primitives import KINDS, Envelope, Line, Loudness, Samples, Section
 
 Apply = Callable[[Samples], Samples]
 
 FLOOR = 1e-9  # linear level that reads as silence
 HOLD_LUFS = -50.0  # under this loudness, gain holds
 WINDOW_MS = 400.0  # loudness window, automatic gain
-K_SHELF = (1681.974, 0.7071752, 3.999843)  # BS.1770 stage 1, hz, q and gain_db
-K_HIGHPASS = (38.13547, 0.5003270)  # BS.1770 stage 2, hz and q
-OFFSET_LUFS = -0.691  # calibration, K-weighted mean square, BS.1770
 COMBS = (1116, 1188, 1277, 1356)  # Schroeder delays in samples at 44100 Hz
 ALLPASS = (556, 441)
 ALLPASS_FEEDBACK = 0.5
@@ -130,22 +127,16 @@ class AGC:
 
     def start(self, rate: int) -> Apply:
         """Measures loudness, ramps gain."""
-        shelf, cut = k_weighting(rate)
-        window = np.zeros(int(WINDOW_MS * rate / 1000.0), dtype=np.float32)
-        target, bound = self.target_lufs, self.max_db_per_second / rate
-        gain_db = 0.0
+        loudness = Loudness(rate=rate, window_ms=WINDOW_MS)
+        gain = Envelope(
+            rate=rate, attack_ms=0.0, release_ms=0.0, max_per_second=self.max_db_per_second
+        )
+        target = self.target_lufs
 
         def apply(x: Samples) -> Samples:
-            nonlocal window, gain_db
-            weighted = cut.run(shelf.run(x))
-            window = np.concatenate((window, weighted * weighted))[-window.size :]
-            loudness = OFFSET_LUFS + 10.0 * math.log10(float(window.mean()) + FLOOR)
-            step = bound * x.size
-            wanted = gain_db if loudness < HOLD_LUFS else target - loudness
-            moved = min(max(wanted, gain_db - step), gain_db + step)
-            ramp = np.linspace(gain_db, moved, x.size, dtype=np.float32)
-            gain_db = moved
-            return x * _gain(ramp)
+            level = loudness.run(x)
+            wanted = gain.value if level < HOLD_LUFS else target - level
+            return x * _gain(gain.run(np.full(x.size, wanted, dtype=np.float32)))
 
         return apply
 
@@ -247,16 +238,6 @@ class DeEsser:
             return x - (1.0 - _gain(-slope * over)) * found
 
         return apply
-
-
-def k_weighting(rate: int) -> tuple[Section, Section]:
-    """Gives 2 BS.1770 sections, highshelf and highpass."""
-    hz, q, gain_db = K_SHELF
-    cut, cut_q = K_HIGHPASS
-    return (
-        Section.at("highshelf", rate=rate, hz=hz, q=q, gain_db=gain_db),
-        Section.at("highpass", rate=rate, hz=cut, q=cut_q),
-    )
 
 
 def _within(field: str, value: float, low: float, high: float) -> None:

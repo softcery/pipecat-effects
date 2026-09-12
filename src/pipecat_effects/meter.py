@@ -1,65 +1,55 @@
-"""Output meter. Loudness in LUFS, true peak in dBTP."""
+"""Output meter. LUFS loudness, dBTP true peak."""
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
 from scipy.signal import firwin
 
-from pipecat_effects.effects import FLOOR, OFFSET_LUFS, k_weighting
-from pipecat_effects.primitives import Fir, Samples, Section
+from pipecat_effects.primitives import SILENCE, Fir, Loudness, Samples, dbfs
 
+# 48 taps at 4 times, BS.1770 Annex 2
 OVERSAMPLE = 4
-TAPS = 48  # interpolation taps, BS.1770 Annex 2
-BAND = 0.3  # cutoff, part of the oversampled Nyquist rate
-SILENCE = -120.0
+TAPS = 48
+BAND = 0.3
 TRUE_PEAK_TAPS = firwin(TAPS, BAND, window="blackman").astype(np.float32)
 
 
 @dataclass(frozen=True, slots=True)
 class Reading:
-    """Loudness and true peak since the last read."""
+    """One read of the output."""
 
     lufs: float
     dbtp: float
 
 
 class Meter:
-    """Reads loudness and true peak."""
+    """Reads loudness and true peak per interval."""
 
     def __init__(self) -> None:
-        self._weight: tuple[Section, Section] | None = None
+        self._loudness: Loudness | None = None
         self._peak: Fir | None = None
-        self._square = 0.0
-        self._samples = 0
         self._top = 0.0
 
     def start(self, rate: int) -> None:
-        self._weight = k_weighting(rate)
+        """Builds both readers."""
+        self._loudness = Loudness(rate=rate)
         self._peak = Fir(TRUE_PEAK_TAPS, factor=OVERSAMPLE)
-        self._square, self._samples, self._top = 0.0, 0, 0.0
+        self._top = 0.0
 
     def write(self, x: Samples) -> None:
-        if self._weight is None or self._peak is None:
+        """Takes one chunk, none before start."""
+        if self._loudness is None or self._peak is None:
             return
-        shelf, cut = self._weight
-        weighted = cut.run(shelf.run(x)).astype(np.float64)
-        self._square += float(np.square(weighted).sum())
-        self._samples += x.size
+        self._loudness.run(x)
         self._top = max(self._top, float(np.abs(self._peak.run(x)).max(initial=0.0)))
 
-    def quiet(self, samples: int) -> None:
-        """Takes one silent chunk."""
-        self._samples += samples
-
     def read(self) -> Reading:
-        """Gives both readings, then clears them."""
-        mean = self._square / self._samples if self._samples else 0.0
-        lufs = OFFSET_LUFS + 10.0 * math.log10(mean + FLOOR)
+        """Gives both readings, then clears."""
         reading = Reading(
-            lufs=max(lufs, SILENCE), dbtp=max(20.0 * math.log10(self._top + FLOOR), SILENCE)
+            lufs=SILENCE if self._loudness is None else self._loudness.take(),
+            dbtp=dbfs(self._top),
         )
-        self._square, self._samples, self._top = 0.0, 0, 0.0
+        self._top = 0.0
         return reading

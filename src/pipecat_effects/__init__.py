@@ -16,7 +16,7 @@ from pipecat_effects.filter import EffectsFilter
 from pipecat_effects.meter import Meter, Reading
 from pipecat_effects.mixer import FilterMixer
 from pipecat_effects.presets import RADIO, TELEPHONE, WARM, Effects
-from pipecat_effects.primitives import Envelope, Fir, Line, Section
+from pipecat_effects.primitives import Envelope, Fir, Line, Loudness, Section
 
 __all__ = [
     "AGC",
@@ -36,6 +36,7 @@ __all__ = [
     "Gain",
     "Limiter",
     "Line",
+    "Loudness",
     "Meter",
     "Reading",
     "Reverb",

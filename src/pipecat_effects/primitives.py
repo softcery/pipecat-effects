@@ -1,4 +1,4 @@
-"""Four stateful blocks. Each effect composes them and adds no state."""
+"""Five stateful blocks. Each effect composes them and adds no state."""
 
 from __future__ import annotations
 
@@ -13,23 +13,26 @@ Samples = np.ndarray
 
 KINDS = ("lowpass", "highpass", "bandpass", "peak", "lowshelf", "highshelf")
 NYQUIST_RATIO = 0.45  # highest centre, as part of the rate
+BLOCK_MS = 1.0  # envelope step
+K_SHELF = (1681.974, 0.7071752, 3.999843)  # BS.1770 stage 1, hz, q and gain_db
+K_HIGHPASS = (38.13547, 0.5003270)  # BS.1770 stage 2, hz and q
+OFFSET_LUFS = -0.691  # calibration, K-weighted mean square, BS.1770
+SILENCE = -120.0  # floor of one level reading
 
 
 class Section:
-    """One second-order section on sosfilt, with cookbook coefficients."""
+    """One second-order section on sosfilt, or a cascade of them, with cookbook coefficients."""
 
-    def __init__(self, sos: Sequence[float]) -> None:
-        self._sos = np.asarray(sos, dtype=np.float64).reshape(1, 6)
-        self._state = np.zeros((1, 2), dtype=np.float64)
+    def __init__(self, sos: Sequence[float] | Sequence[Sequence[float]]) -> None:
+        self._sos = np.asarray(sos, dtype=np.float64).reshape(-1, 6)
+        self._state = np.zeros((self._sos.shape[0], 2), dtype=np.float64)
 
     @classmethod
     def at(
         cls, kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
     ) -> Section:
-        """Gives one section at this rate. A high centre clamps."""
-        w0 = 2.0 * math.pi * min(hz, NYQUIST_RATIO * rate) / rate
-        b, a = _cookbook(kind, w0=w0, alpha=math.sin(w0) / (2.0 * q), gain_db=gain_db)
-        return cls((*(value / a[0] for value in b), 1.0, a[1] / a[0], a[2] / a[0]))
+        """Gives one section at this rate. A centre over the bound raises."""
+        return cls(_row(kind, rate=rate, hz=hz, q=q, gain_db=gain_db))
 
     def run(self, x: Samples) -> Samples:
         """Filters one chunk and holds its state."""
@@ -38,23 +41,39 @@ class Section:
 
 
 class Envelope:
-    """One-pole follower. Attack on rise, release on fall."""
+    """One-pole follower on 1 ms blocks. Attack on rise, release on fall, bounded rate."""
 
-    def __init__(self, *, rate: int, attack_ms: float, release_ms: float) -> None:
-        self._attack = _pole(attack_ms, rate)
-        self._release = _pole(release_ms, rate)
+    def __init__(
+        self,
+        *,
+        rate: int,
+        attack_ms: float,
+        release_ms: float,
+        max_per_second: float = math.inf,
+    ) -> None:
+        self._block = max(round(BLOCK_MS * rate / 1000.0), 1)
+        blocks = rate / self._block
+        self._attack = _pole(attack_ms, blocks)
+        self._release = _pole(release_ms, blocks)
+        self._step = max_per_second / blocks
         self._value = 0.0
 
+    @property
+    def value(self) -> float:
+        """Gives one level this follower holds."""
+        return self._value
+
     def run(self, x: Samples) -> Samples:
-        """Gives one followed level per sample."""
-        attack, release, value = self._attack, self._release, self._value
-        out = []
-        for sample in x.tolist():
-            pole = attack if sample > value else release
-            value += (1.0 - pole) * (sample - value)
-            out.append(value)
+        """Gives one followed level per sample. It steps once per block."""
+        attack, release, step, value = self._attack, self._release, self._step, self._value
+        levels = []
+        for peak in _peaks(x, self._block):
+            pole = attack if peak > value else release
+            moved = value + (1.0 - pole) * (peak - value)
+            value = min(max(moved, value - step), value + step)
+            levels.append(value)
         self._value = value
-        return np.array(out, dtype=np.float32)
+        return np.repeat(np.array(levels, dtype=np.float32), self._block)[: x.size]
 
 
 class Line:
@@ -98,9 +117,83 @@ class Fir:
         return (sliding_window_view(block, self._phases.shape[0]) @ self._phases).reshape(-1)
 
 
-def _pole(ms: float, rate: int) -> float:
-    """Gives one pole of this time constant."""
-    return math.exp(-1000.0 / (ms * rate)) if ms > 0.0 else 0.0
+class Loudness:
+    """K-weighted loudness on 2 sections, BS.1770. One window gives the momentary value."""
+
+    def __init__(self, *, rate: int, window_ms: float = 0.0) -> None:
+        hz, q, gain_db = K_SHELF
+        cut_hz, cut_q = K_HIGHPASS
+        self._weight = Section(
+            (
+                _row("highshelf", rate=rate, hz=hz, q=q, gain_db=gain_db),
+                _row("highpass", rate=rate, hz=cut_hz, q=cut_q),
+            )
+        )
+        self._window = np.zeros(round(window_ms * rate / 1000.0), dtype=np.float64)
+        self._square = 0.0
+        self._samples = 0
+
+    @property
+    def value(self) -> float:
+        """Gives loudness since one take, in LUFS."""
+        return lufs(self._square / self._samples if self._samples else 0.0)
+
+    def run(self, x: Samples) -> float:
+        """Takes one chunk. Gives window loudness, or interval loudness with no window."""
+        squares = np.square(self._weight.run(x).astype(np.float64))
+        self._square += float(squares.sum())
+        self._samples += x.size
+        if not self._window.size:
+            return self.value
+        self._window = np.concatenate((self._window, squares))[-self._window.size :]
+        return lufs(float(self._window.mean()))
+
+    def take(self) -> float:
+        """Gives loudness since one take, then clears it."""
+        taken = self.value
+        self._square, self._samples = 0.0, 0
+        return taken
+
+
+def lufs(mean_square: float) -> float:
+    """Gives loudness of one K-weighted mean square. Silence gives its floor."""
+    return _floor(OFFSET_LUFS + 10.0 * math.log10(mean_square)) if mean_square > 0.0 else SILENCE
+
+
+def dbfs(level: float) -> float:
+    """Gives one amplitude in dB. Silence gives the floor."""
+    return _floor(20.0 * math.log10(level)) if level > 0.0 else SILENCE
+
+
+def _floor(db: float) -> float:
+    """Holds one reading at the floor."""
+    return max(db, SILENCE)
+
+
+def _row(
+    kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
+) -> tuple[float, ...]:
+    """Gives 6 coefficients of one section at this rate. A centre over its bound raises."""
+    bound = NYQUIST_RATIO * rate
+    if hz > bound:
+        raise ValueError(
+            f"hz: expected at most {bound} Hz at the rate {rate} Hz, got a centre over it"
+        )
+    w0 = 2.0 * math.pi * hz / rate
+    b, a = _cookbook(kind, w0=w0, alpha=math.sin(w0) / (2.0 * q), gain_db=gain_db)
+    return (*(value / a[0] for value in b), 1.0, a[1] / a[0], a[2] / a[0])
+
+
+def _peaks(x: Samples, size: int) -> Samples:
+    """Gives highest value of each block. Its last block repeats one edge."""
+    blocks = -(-x.size // size)
+    padded = np.pad(x, (0, blocks * size - x.size), mode="edge")
+    return padded.reshape(blocks, size).max(axis=1)
+
+
+def _pole(ms: float, per_second: float) -> float:
+    """Gives one pole of this time constant, at this step rate."""
+    return math.exp(-1000.0 / (ms * per_second)) if ms > 0.0 else 0.0
 
 
 def _cookbook(

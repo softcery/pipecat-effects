@@ -27,6 +27,7 @@ def main() -> None:
     """Measures each cost, appends one row."""
     parsed = _arguments()
     row = {
+        "sha": parsed.sha,
         "run": datetime.now(UTC).isoformat(timespec="seconds"),
         "python": platform.python_version(),
         "machine": platform.machine(),
@@ -117,6 +118,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True, help="path of the jsonl rows")
     parser.add_argument("--rate", type=int, default=RATE, help="transport sample rate in Hz")
+    parser.add_argument("--sha", default="", help="commit this run measures")
     return parser.parse_args()
 
 
