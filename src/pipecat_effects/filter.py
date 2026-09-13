@@ -9,9 +9,9 @@ import numpy as np
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame, FilterEnableFrame, FilterUpdateSettingsFrame
 
-from pipecat_effects.effects import Apply, Effect, Limiter
+from pipecat_effects.effects import Apply, Biquad, Effect, Limiter
 from pipecat_effects.meter import Meter
-from pipecat_effects.primitives import Samples
+from pipecat_effects.primitives import Samples, Section
 
 SCALE = 32768.0  # int16 full scale
 TOP = 32767  # highest int16 sample
@@ -32,7 +32,7 @@ class EffectsFilter(BaseAudioFilter):
     async def start(self, sample_rate: int) -> None:
         """Builds the chain at this rate."""
         self._rate = sample_rate
-        self._chain = [effect.start(sample_rate) for effect in self._effects]
+        self._chain = _started(self._effects, sample_rate)
         self.meter.start(sample_rate)
 
     async def stop(self) -> None:
@@ -76,7 +76,23 @@ class EffectsFilter(BaseAudioFilter):
         if not self._rate:
             return
         self._fading = self._chain
-        self._chain = [effect.start(self._rate) for effect in self._effects]
+        self._chain = _started(self._effects, self._rate)
+
+
+def _started(effects: Sequence[Effect], rate: int) -> list[Apply]:
+    """Starts each effect. Adjacent biquads run as one cascade in one sosfilt call."""
+    chain: list[Apply] = []
+    rows: list[tuple[float, ...]] = []
+    for effect in (*effects, None):
+        if isinstance(effect, Biquad):
+            rows.append(effect.row(rate))
+            continue
+        if rows:
+            chain.append(Section(rows).run)
+            rows = []
+        if effect is not None:
+            chain.append(effect.start(rate))
+    return chain
 
 
 def _through(chain: Sequence[Apply], x: Samples) -> Samples:

@@ -32,7 +32,7 @@ class Section:
         cls, kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
     ) -> Section:
         """Gives one section at this rate. A centre over the bound raises."""
-        return cls(_row(kind, rate=rate, hz=hz, q=q, gain_db=gain_db))
+        return cls(row(kind, rate=rate, hz=hz, q=q, gain_db=gain_db))
 
     def run(self, x: Samples) -> Samples:
         """Filters one chunk and holds its state."""
@@ -125,11 +125,13 @@ class Loudness:
         cut_hz, cut_q = K_HIGHPASS
         self._weight = Section(
             (
-                _row("highshelf", rate=rate, hz=hz, q=q, gain_db=gain_db),
-                _row("highpass", rate=rate, hz=cut_hz, q=cut_q),
+                row("highshelf", rate=rate, hz=hz, q=q, gain_db=gain_db),
+                row("highpass", rate=rate, hz=cut_hz, q=cut_q),
             )
         )
         self._window = np.zeros(round(window_ms * rate / 1000.0), dtype=np.float64)
+        self._at = 0
+        self._held = 0.0
         self._square = 0.0
         self._samples = 0
 
@@ -145,8 +147,28 @@ class Loudness:
         self._samples += x.size
         if not self._window.size:
             return self.value
-        self._window = np.concatenate((self._window, squares))[-self._window.size :]
-        return lufs(float(self._window.mean()))
+        return lufs(self._slide(squares) / self._window.size)
+
+    def _slide(self, squares: Samples) -> float:
+        """Writes one chunk into the ring, oldest first. Gives the sum of the window."""
+        size = self._window.size
+        if squares.size >= size:
+            self._window[:] = squares[-size:]
+            self._at, self._held = 0, float(self._window.sum())
+            return self._held
+        end = self._at + squares.size
+        if end <= size:
+            self._held += float(squares.sum() - self._window[self._at : end].sum())
+            self._window[self._at : end] = squares
+        else:
+            head = size - self._at
+            self._held += float(
+                squares.sum() - self._window[self._at :].sum() - self._window[: end - size].sum()
+            )
+            self._window[self._at :] = squares[:head]
+            self._window[: end - size] = squares[head:]
+        self._at = end % size
+        return self._held
 
     def take(self) -> float:
         """Gives loudness since one take, then clears it."""
@@ -170,7 +192,7 @@ def _floor(db: float) -> float:
     return max(db, SILENCE)
 
 
-def _row(
+def row(
     kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
 ) -> tuple[float, ...]:
     """Gives 6 coefficients of one section at this rate. A centre over its bound raises."""

@@ -9,7 +9,7 @@ from typing import Protocol
 
 import numpy as np
 
-from pipecat_effects.primitives import KINDS, Envelope, Line, Loudness, Samples, Section
+from pipecat_effects.primitives import KINDS, Envelope, Line, Loudness, Samples, Section, row
 
 Apply = Callable[[Samples], Samples]
 
@@ -62,7 +62,11 @@ class Biquad:
 
     def start(self, rate: int) -> Apply:
         """Gives one section run call."""
-        return Section.at(self.kind, rate=rate, hz=self.hz, q=self.q, gain_db=self.gain_db).run
+        return Section(self.row(rate)).run
+
+    def row(self, rate: int) -> tuple[float, ...]:
+        """Gives the 6 coefficients of this section at this rate."""
+        return row(self.kind, rate=rate, hz=self.hz, q=self.q, gain_db=self.gain_db)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
