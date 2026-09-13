@@ -150,7 +150,7 @@ class Loudness:
         return lufs(self._slide(squares) / self._window.size)
 
     def _slide(self, squares: Samples) -> float:
-        """Writes one chunk into the ring, oldest first. Gives the sum of the window."""
+        """Writes one chunk into its ring, oldest first, and gives that window sum."""
         size = self._window.size
         if squares.size >= size:
             self._window[:] = squares[-size:]
