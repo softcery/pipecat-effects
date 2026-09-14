@@ -69,13 +69,13 @@ No filter. -18.3 LUFS, -1.3 dBTP.
 https://github.com/user-attachments/assets/b0503417-de1f-47bd-90e0-1152c1e9d34a
 
 The chain in [Use](#use): 2.5 dB low shelf at 200 Hz, 2 dB cut at 3.2 kHz, de-esser, 3:1
-compressor. -23.2 LUFS, -5.4 dBTP.
+compressor. -23.2 LUFS, -5.5 dBTP.
 
 ### Telephone
 
 https://github.com/user-attachments/assets/dcb91965-4ee8-4227-b445-88c6d366de87
 
-300 Hz to 3400 Hz band, 4:1 compressor, drive 3.0 at 0.3 mix. -22.0 LUFS, -5.0 dBTP.
+300 Hz to 3400 Hz band, 4:1 compressor, drive 3.0 at 0.3 mix. -22.0 LUFS, -5.1 dBTP.
 
 ### Broadcast
 
@@ -88,7 +88,7 @@ https://github.com/user-attachments/assets/e0a58689-c594-4ff4-8a63-84776262fd14
 
 https://github.com/user-attachments/assets/fd63f979-ba8f-4652-a544-b967fd25f1a6
 
-Schroeder reverb, 400 ms decay, 0.3 mix. -21.1 LUFS, -3.4 dBTP.
+Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.4 dBTP.
 
 ## Build a chain
 
@@ -174,8 +174,9 @@ reading = mixer.read()  # {"lufs": -19.92, "dbtp": -1.04}, or {} on silence
 
 - `EffectsFilter.meter.read()` gives a `Reading` with `lufs` and `dbtp` of the output since the
   last read, then clears both.
-- `lufs` is the K-weighted loudness. `dbtp` is the true peak, on 4 times oversampling with 48
-  taps.
+- `lufs` is the K-weighted loudness of ITU-R BS.1770. The published 48 kHz filter moves to the
+  session rate by the bilinear transform. A 997 Hz sine at 0 dBFS reads -3.01 LUFS.
+- `dbtp` is the true peak, on 4 times oversampling with 48 taps.
 - `FilterMixer.read()` gives the same pair as a mapping, and gives no field on silence.
 - Both readings hold a floor of -120.0 dB.
 
@@ -208,6 +209,10 @@ commit 859e13c.
   over the ceiling distorts.
 - The -1 dB ceiling leaves the margin for inter-sample peaks at a codec resampler. The true peak
   meter only reports.
+- The true peak meter cuts at the input Nyquist. At a 24 kHz rate it reads a 10 kHz sine 0.5 dB
+  under its peak.
+- The K-weighting at 8 kHz differs from the standard by 0.12 dB at most from 100 Hz to 3 kHz. At
+  24 kHz it differs by 0.023 dB at most.
 - The package has no limiter with lookahead. The broadcast clip holds a peak-to-loudness ratio,
   true peak minus loudness, of 14.9 dB. The unprocessed clip holds 17.0 dB.
 - A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the highest allowed

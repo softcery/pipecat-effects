@@ -4,24 +4,33 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from functools import cache
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
-from scipy.signal import sosfilt
+from scipy.signal import sos2zpk, sosfilt, zpk2sos
 
 Samples = np.ndarray
 
 KINDS = ("lowpass", "highpass", "bandpass", "peak", "lowshelf", "highshelf")
 NYQUIST_RATIO = 0.45  # highest centre, as part of the rate
 BLOCK_MS = 1.0  # envelope step
-K_SHELF = (1681.974, 0.7071752, 3.999843)  # BS.1770 stage 1, hz, q and gain_db
-K_HIGHPASS = (38.13547, 0.5003270)  # BS.1770 stage 2, hz and q
+K_RATE = 48000  # rate of the published K-weighting sections
+# fmt: off
+K_SECTIONS = (  # BS.1770 stage 1 shelf and stage 2 highpass, b0 b1 b2 over a0 a1 a2
+    (1.53512485958697, -2.69169618940638, 1.19839281085285,
+     1.0, -1.69065929318241, 0.73248077421585),
+    (1.0, -2.0, 1.0,
+     1.0, -1.99004745483398, 0.99007225036621),
+)
+# fmt: on
+K_MATCH_HZ = 1000.0  # the K-weighting at each rate keeps the published response here
 OFFSET_LUFS = -0.691  # calibration, K-weighted mean square, BS.1770
 SILENCE = -120.0  # floor of one level reading
 
 
 class Section:
-    """One second-order section on sosfilt, or a cascade, with Audio EQ Cookbook coefficients."""
+    """One second-order section on sosfilt, or a cascade."""
 
     def __init__(self, sos: Sequence[float] | Sequence[Sequence[float]]) -> None:
         self._sos = np.asarray(sos, dtype=np.float64).reshape(-1, 6)
@@ -31,7 +40,7 @@ class Section:
     def at(
         cls, kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
     ) -> Section:
-        """Gives one section at this rate. A centre over the bound raises."""
+        """Gives one Audio EQ Cookbook section at this rate. A centre over the bound raises."""
         return cls(row(kind, rate=rate, hz=hz, q=q, gain_db=gain_db))
 
     def run(self, x: Samples) -> Samples:
@@ -121,14 +130,7 @@ class Loudness:
     """K-weighted loudness on 2 sections, BS.1770. One window gives the momentary value."""
 
     def __init__(self, *, rate: int, window_ms: float = 0.0) -> None:
-        hz, q, gain_db = K_SHELF
-        cut_hz, cut_q = K_HIGHPASS
-        self._weight = Section(
-            (
-                row("highshelf", rate=rate, hz=hz, q=q, gain_db=gain_db),
-                row("highpass", rate=rate, hz=cut_hz, q=cut_q),
-            )
-        )
+        self._weight = Section(_k_weighting(rate))
         self._window = np.zeros(round(window_ms * rate / 1000.0), dtype=np.float64)
         self._at = 0
         self._held = 0.0
@@ -272,3 +274,27 @@ def _cookbook(
 def _poles(cos: float, alpha: float) -> tuple[float, float, float]:
     """Gives one denominator each resonant kind shares."""
     return (1.0 + alpha, -2.0 * cos, 1.0 - alpha)
+
+
+@cache
+def _k_weighting(rate: int) -> tuple[tuple[float, ...], ...]:
+    """Gives the K-weighting sections at this rate, from the published sections at K_RATE.
+
+    Each zero and pole moves through the s plane. The gain keeps the response at K_MATCH_HZ.
+    """
+    zeros, poles, gain = sos2zpk(K_SECTIONS)
+    zeros_at, poles_at = _moved(zeros, rate), _moved(poles, rate)
+    gain_at = gain * _response(zeros, poles, K_RATE) / _response(zeros_at, poles_at, rate)
+    return tuple(map(tuple, zpk2sos(zeros_at, poles_at, gain_at).tolist()))
+
+
+def _moved(roots: np.ndarray, rate: int) -> np.ndarray:
+    """Moves roots from K_RATE to this rate by the bilinear transform, through the s plane."""
+    s = 2.0 * K_RATE * (roots - 1.0) / (roots + 1.0)
+    return (2.0 * rate + s) / (2.0 * rate - s)
+
+
+def _response(zeros: np.ndarray, poles: np.ndarray, rate: int) -> float:
+    """Gives the unit gain magnitude of these roots at K_MATCH_HZ."""
+    z = np.exp(2j * np.pi * K_MATCH_HZ / rate)
+    return float(np.abs(np.prod(z - zeros) / np.prod(z - poles)))
