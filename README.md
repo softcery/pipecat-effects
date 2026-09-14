@@ -2,10 +2,6 @@
 
 Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One filter, 8 effects
 and one loudness meter. You build the chain. The chain adds 0 samples of latency.
-The package ships a `py.typed` marker and exports `Effect`, `Apply` and `Samples` for a
-caller who writes an effect.
-
-CI tests the package on `uv.lock` and on the lowest allowed pipecat-ai, numpy and scipy.
 
 ## Install
 
@@ -15,7 +11,7 @@ pip install pipecat-effects
 
 ## Use
 
-Pipecat has no output filter field yet, so `FilterMixer` runs the filter as the output mixer.
+Pipecat 1.10.0 has no output filter field. `FilterMixer` runs the filter as the output mixer.
 
 ```python
 from pipecat.transports.base_transport import TransportParams
@@ -66,7 +62,8 @@ python examples/bot.py
 One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 40 ms chunks, the stock output
 chunk of pipecat. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips
 with ffmpeg. Each player shows the waveform and plays the clip. GitHub mutes each player at
-load. Unmute it to listen. Loudness is integrated, measured by ffmpeg `ebur128`.
+load. Unmute it to listen. On PyPI each player is a link to GitHub. Loudness is integrated,
+measured by ffmpeg `ebur128`.
 
 ### Unprocessed
 
@@ -119,8 +116,8 @@ The chain in [Use](#use) is one example. [Listen](#listen) compares it with 3 ot
 | effect | field | default | range |
 | --- | --- | --- | --- |
 | `Gain` | `db` | 0.0 | -60 to 24 |
-| `Biquad` | `kind` | none | one of lowpass, highpass, bandpass, peak, lowshelf, highshelf |
-| | `hz` | none | 10 to 20000 |
+| `Biquad` | `kind` | required | one of lowpass, highpass, bandpass, peak, lowshelf, highshelf |
+| | `hz` | required | 10 to 20000 |
 | | `q` | 0.7071 | 0.1 to 20 |
 | | `gain_db` | 0.0 | -24 to 24 |
 | `Saturation` | `drive` | 2.0 | 0.1 to 20 |
@@ -195,7 +192,7 @@ reading = mixer.read()  # Reading(lufs=-19.92, dbtp=-1.04), or None on silence
 - `FilterMixer` meters each chunk it gives to the transport, after the int16 cast.
 - `FilterMixer.read()` gives a `Reading` with `lufs` and `dbtp` since the last read, then clears
   both. Silence gives `None`.
-- `lufs` is the K-weighted loudness of ITU-R BS.1770. The published 48 kHz filter moves to the
+- `lufs` is the K-weighted loudness of ITU-R BS.1770, the loudness standard. The published 48 kHz filter moves to the
   session rate by the bilinear transform. A 997 Hz sine at 0 dBFS reads -3.01 LUFS.
 - `dbtp` is the true peak, on 4 times oversampling with 48 taps.
 - `Meter` reads float chunks for any other caller. Its `read` gives the floor, -120.0 dB, in
@@ -217,48 +214,59 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 
 ## Limits
 
+### Chain
+
 - The filter runs on mono. `FilterMixer.start` raises on more than 1 channel.
-- With an output mixer, a flush that fails to drain does not time out. Each mixer chunk reaches
-  the pipeline sink and counts as progress. A flush that drains returns. The defect is in
-  pipecat 1.10.0 and holds for each output mixer.
 - The chain runs on each chunk, silence included, so attack and release stay continuous through
   silence. At the stock `audio_out_10ms_chunks` of 4, one idle session costs 25 silent chunks of
   40 ms a second, 7.9 ms of compute a second on the [Cost](#cost) machine.
+- A bypassed chain keeps running, so it costs the same as an active chain.
+- Outside a bypass, the chunk after an update runs the old chain and the new chain.
+- A chunk of 0 samples passes through. An odd byte count raises `ValueError` that names `audio`.
+- A `Biquad` or `DeEsser` centre over 0.45 of the sample rate raises at `start`, with the highest
+  allowed centre and the rate. The error names `hz`, not the effect.
+- At 8 kHz the highest centre is 3600 Hz. The chain in [Use](#use) raises there, since its
+  `DeEsser` sits at 6500 Hz.
+- Not included: lookahead, convolution, pitch shift, formant shift. The broadcast clip holds a
+  peak-to-loudness ratio, true peak minus loudness, of 14.9 dB. The unprocessed clip holds
+  17.0 dB. A hall reverb needs convolution.
+
+### Effects
+
 - `Compressor` and `DeEsser` set the gain of each 1 ms block from the peak of that block. `AGC`
   sets one target per chunk from the loudness at the chunk end. Each gain reads ahead inside its
   chunk, by up to 1 ms or 1 chunk.
-- A bypassed chain keeps running, so it costs the same as an active chain.
-- Outside a bypass, the chunk after an update runs the old chain and the new chain.
-- `AGC` reads momentary loudness without the gate of ITU-R BS.1770, the loudness standard. Under
-  -50 LUFS the gain holds.
+- `AGC` reads momentary loudness without the gate of BS.1770. Under -50 LUFS the gain holds.
 - `AGC` sets the level at its place in the chain. Later stages move the output level. The EQ and
   compression clip holds `AGC(target_lufs=-20.0)` and measures -23.2 LUFS.
 - `Limiter` is a memoryless soft clipper. It has no attack or release, so a signal driven far
   over the ceiling distorts.
 - The -1 dB ceiling leaves the margin for inter-sample peaks at a codec resampler. The true peak
   meter only reports.
+- One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
+  24 kHz rate.
+- `Reverb` takes `decay_ms` to 500.
+
+### Meter
+
 - The true peak meter cuts at the input Nyquist. At a 24 kHz rate it reads a 10 kHz sine 0.5 dB
   under its peak.
 - The K-weighting at 8 kHz differs from the standard by 0.43 dB at most from 100 Hz to 3 kHz. At
   24 kHz it differs by 0.040 dB at most.
-- The package has no limiter with lookahead. The broadcast clip holds a peak-to-loudness ratio,
-  true peak minus loudness, of 14.9 dB. The unprocessed clip holds 17.0 dB.
-- A `Biquad` or `DeEsser` centre over 0.45 of the sample rate raises at `start`, with the highest
-  allowed centre and the rate. The error names `hz`, not the effect.
-- At 8 kHz the highest centre is 3600 Hz. The chain in [Use](#use) raises there, since its
-  `DeEsser` sits at 6500 Hz.
-- One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
-  24 kHz rate.
-- A chunk of 0 samples passes through. An odd byte count raises `ValueError` that names `audio`.
-- `Reverb` takes `decay_ms` to 500. A hall reverb needs convolution, which is not included.
-- Pitch shift, formant shift, lookahead and convolution are not included.
-- `FilterMixer` holds the meter. If pipecat takes an output filter field on `TransportParams`,
-  that field takes the filter alone. The reading then needs its own adapter or an observer.
+
+### Pipecat
+
+- With an output mixer, a flush that fails to drain does not time out. Each mixer chunk reaches
+  the pipeline sink and counts as progress. A flush that drains returns. The defect is in
+  pipecat 1.10.0 and holds for each output mixer.
 
 ## Develop
 
+- The package ships a `py.typed` marker. It exports `Effect`, `Apply` and `Samples` for a caller
+  who writes an effect.
 - `make lint` checks the lock, the format, the lint rules, and the types with pyright.
-- `make test` runs the tests. `make test-lowest` runs them on the lowest allowed dependencies.
+- `make test` runs the tests. `make test-lowest` runs them on the lowest allowed pipecat-ai,
+  numpy and scipy. CI runs both.
 - `make audit` checks `uv.lock` for known vulnerabilities.
 
 ## License
