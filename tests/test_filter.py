@@ -78,11 +78,11 @@ async def test_an_update_payload_outside_a_sequence_names_the_effects_field():
 
     with pytest.raises(TypeError, match="effects") as raised:
         await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": 3}))
-    with pytest.raises(TypeError, match="effects") as listed:
+    with pytest.raises(TypeError, match="effects: index 0") as listed:
         await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": [{"db": 0}]}))
 
     assert "got one int" in str(raised.value)
-    assert "got 1 without it" in str(listed.value)
+    assert "got dict" in str(listed.value)
 
 
 async def test_an_odd_byte_count_names_the_audio_field():
@@ -103,7 +103,7 @@ async def test_an_update_with_a_start_that_gives_no_callable_keeps_the_old_chain
     with pytest.raises(TypeError, match="effects: index 0") as raised:
         await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": [Meter()]}))
 
-    assert "got NoneType" in str(raised.value)
+    assert "got Meter" in str(raised.value)
     assert await effects.filter(AUDIO) == before
 
 

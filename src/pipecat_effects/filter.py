@@ -9,7 +9,7 @@ import numpy as np
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame, FilterEnableFrame, FilterUpdateSettingsFrame
 
-from pipecat_effects.effects import Apply, Biquad, Effect, Effects
+from pipecat_effects.effects import Apply, Biquad, Effects
 from pipecat_effects.primitives import Samples, Section
 
 SCALE = 32768.0  # int16 full scale
@@ -73,8 +73,10 @@ class EffectsFilter(BaseAudioFilter):
         if self._rate:
             try:
                 self._chain = _started(effects, self._rate)
-            except (TypeError, ValueError) as error:
-                raise type(error)(f"{SETTING}: {error}") from error
+            except ValueError as error:
+                raise ValueError(f"{SETTING}: {error}") from error
+            except TypeError as error:
+                raise TypeError(f"{SETTING}: {error}") from error
         self._effects = effects
 
 
@@ -88,23 +90,31 @@ def decoded(audio: bytes) -> Samples:
 def _started(effects: Effects, rate: int) -> list[Apply]:
     """Starts each effect. Adjacent biquads run as one cascade in one sosfilt call."""
     chain: list[Apply] = []
-    rows: list[tuple[float, ...]] = []
-    for index, effect in enumerate((*effects, None)):
+    biquads: list[Biquad] = []
+    for index, effect in enumerate(effects):
         if isinstance(effect, Biquad):
-            rows.append(effect.row(rate))
-            continue
-        if rows:
-            chain.append(Section(rows).run)
-            rows = []
-        if effect is None:
-            continue
-        stage = effect.start(rate)
-        if not callable(stage):
-            raise TypeError(
-                f"index {index}: expected start to give a callable, got {type(stage).__name__}"
-            )
-        chain.append(stage)
-    return chain
+            biquads.append(effect)
+        else:
+            chain += [*_cascade(biquads, rate), _stage(index, effect, rate)]
+            biquads = []
+    return chain + _cascade(biquads, rate)
+
+
+def _cascade(biquads: Sequence[Biquad], rate: int) -> list[Apply]:
+    """Gives one section run call for these biquads, or none for 0 biquads."""
+    return [Section([biquad.row(rate) for biquad in biquads]).run] if biquads else []
+
+
+def _stage(index: int, effect: Any, rate: int) -> Apply:
+    """Starts one effect. An item whose start gives no callable raises with its index."""
+    start = getattr(effect, "start", None)
+    apply: Apply | None = None if start is None else start(rate)
+    if not callable(apply):
+        raise TypeError(
+            f"index {index}: expected an effect whose start gives a callable, "
+            f"got {type(effect).__name__}"
+        )
+    return apply
 
 
 def _through(chain: Sequence[Apply], x: Samples) -> Samples:
@@ -126,7 +136,4 @@ def _sequence(effects: Any) -> Effects:
         raise TypeError(
             f"{SETTING}: expected a sequence of effects, got one {type(effects).__name__}"
         )
-    outside = sum(1 for effect in effects if not isinstance(effect, Effect))
-    if outside:
-        raise TypeError(f"{SETTING}: expected each item to give start, got {outside} without it")
     return tuple(effects)
