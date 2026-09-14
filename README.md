@@ -1,5 +1,10 @@
 # pipecat-effects
 
+[![PyPI version](https://img.shields.io/pypi/v/pipecat-effects?cacheSeconds=3600)](https://pypi.org/project/pipecat-effects)
+[![Python versions](https://img.shields.io/pypi/pyversions/pipecat-effects?cacheSeconds=3600)](https://pypi.org/project/pipecat-effects)
+[![Check workflow](https://img.shields.io/github/actions/workflow/status/softcery/pipecat-effects/check.yml?branch=main&label=check)](https://github.com/softcery/pipecat-effects/actions/workflows/check.yml)
+[![License BSD 2-Clause](https://img.shields.io/github/license/softcery/pipecat-effects)](LICENSE)
+
 pipecat-effects runs an audio effects chain on the output of a
 [pipecat](https://github.com/pipecat-ai/pipecat) bot. You build the chain from 8 effects, and it
 adds no latency.
