@@ -31,9 +31,9 @@ async def test_an_update_payload_outside_a_sequence_names_the_effects_field():
     effects = EffectsFilter([Gain(db=0.0)])
     await effects.start(RATE)
 
-    with pytest.raises(ValueError, match="effects") as raised:
+    with pytest.raises(TypeError, match="effects") as raised:
         await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": 3}))
-    with pytest.raises(ValueError, match="effects") as listed:
+    with pytest.raises(TypeError, match="effects") as listed:
         await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": [{"db": 0}]}))
 
     assert "got one int" in str(raised.value)

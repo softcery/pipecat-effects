@@ -164,7 +164,7 @@ await task.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=-3
   chunk.
 - The transport maps both to `FilterEnableFrame` and `FilterUpdateSettingsFrame`. Call
   `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
-- An `effects` value outside a sequence raises `ValueError` that names the field and the type.
+- An `effects` value outside a sequence of effects raises `TypeError` that names the field.
 
 ## Meter
 

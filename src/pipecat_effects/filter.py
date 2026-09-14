@@ -112,10 +112,10 @@ def _limited(effects: Sequence[Effect]) -> tuple[Effect, ...]:
 def _sequence(effects: Any) -> Sequence[Effect]:
     """Refuses one update payload outside a sequence of effects."""
     if isinstance(effects, str | bytes) or not isinstance(effects, Sequence):
-        raise ValueError(
+        raise TypeError(
             f"{SETTING}: expected a sequence of effects, got one {type(effects).__name__}"
         )
     outside = sum(1 for effect in effects if not hasattr(effect, "start"))
     if outside:
-        raise ValueError(f"{SETTING}: expected each item to give start, got {outside} without it")
+        raise TypeError(f"{SETTING}: expected each item to give start, got {outside} without it")
     return effects
