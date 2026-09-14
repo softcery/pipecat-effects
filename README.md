@@ -1,7 +1,8 @@
 # pipecat-effects
 
-Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One filter, 8 effects
-and one loudness meter. You build the chain. The chain adds 0 samples of latency.
+pipecat-effects runs an audio effects chain on the output of a
+[pipecat](https://github.com/pipecat-ai/pipecat) bot. You build the chain from 8 effects, and it
+adds no latency.
 
 ## Install
 

@@ -1,4 +1,4 @@
-"""Output audio effects for pipecat. Filter, effects, meter."""
+"""Audio effects for the output of a pipecat bot."""
 
 from pipecat_effects.effects import (
     AGC,

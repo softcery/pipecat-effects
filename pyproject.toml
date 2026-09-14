@@ -1,7 +1,7 @@
 [project]
 name = "pipecat-effects"
 version = "0.1.0"
-description = "Output audio effects for pipecat. One filter, 8 effects and a loudness meter."
+description = "Audio effects for the output of a pipecat bot."
 readme = "README.md"
 license = "BSD-2-Clause"
 license-files = ["LICENSE"]
