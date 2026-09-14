@@ -62,33 +62,33 @@ python examples/bot.py
 
 ## Listen
 
-One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 20 ms chunks as a transport
-does. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips with ffmpeg.
-GitHub mutes each player at load. Unmute it to listen. Loudness is integrated, measured by
-ffmpeg `ebur128`.
+One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 40 ms chunks, the stock output
+chunk of pipecat. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips
+with ffmpeg. GitHub mutes each player at load. Unmute it to listen. Loudness is integrated,
+measured by ffmpeg `ebur128`.
 
 ### Unprocessed
 
-https://github.com/user-attachments/assets/db4aec5b-0c94-4f29-95b0-343d64e6c718
+https://github.com/user-attachments/assets/9b4a4b80-8168-4380-a12d-b98f9fdcaaa7
 
 No filter. -18.3 LUFS, -1.3 dBTP.
 
 ### EQ and compression
 
-https://github.com/user-attachments/assets/b0503417-de1f-47bd-90e0-1152c1e9d34a
+https://github.com/user-attachments/assets/33bbbafc-3627-416c-84f0-baf398f4922f
 
 The chain in [Use](#use): 2.5 dB low shelf at 200 Hz, 2 dB cut at 3.2 kHz, de-esser, 3:1
 compressor. -23.2 LUFS, -5.5 dBTP.
 
 ### Telephone
 
-https://github.com/user-attachments/assets/dcb91965-4ee8-4227-b445-88c6d366de87
+https://github.com/user-attachments/assets/6fff6b7a-ef53-44a1-b275-5e29ca4ab1bb
 
 300 Hz to 3400 Hz band, 4:1 compressor, drive 3.0 at 0.3 mix. -22.0 LUFS, -5.1 dBTP.
 
 ### Broadcast
 
-https://github.com/user-attachments/assets/e0a58689-c594-4ff4-8a63-84776262fd14
+https://github.com/user-attachments/assets/0e336600-fde6-4ddb-8210-bd74be7fe0b4
 
 100 Hz high-pass, de-esser, 4:1 compressor with 0.5 ms attack and 18 dB makeup, +4 dB at 3.5 kHz.
 -16.3 LUFS, -1.4 dBTP. Against the unprocessed clip: +2.0 LU, and +3.7 dB in the share of power
@@ -96,9 +96,9 @@ from 2 to 4 kHz.
 
 ### Room
 
-https://github.com/user-attachments/assets/fd63f979-ba8f-4652-a544-b967fd25f1a6
+https://github.com/user-attachments/assets/6cbc794c-5a33-4cb4-a2be-ccfebffe1f79
 
-Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.4 dBTP.
+Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.5 dBTP.
 
 ## Build a chain
 
@@ -199,15 +199,15 @@ reading = mixer.read()  # Reading(lufs=-19.92, dbtp=-1.04), or None on silence
 
 ## Cost
 
-One chunk at 24 kHz, the 8 effect chain above, mean of 1000 chunks, median of 4 runs. Python
-3.13.9, macOS arm64.
+One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain above, mean of
+1000 chunks, median of 4 runs. Python 3.13.9, macOS arm64.
 
 | path | mean | 95th |
 | --- | --- | --- |
-| filter, 20 ms chunk | 0.143 ms | 0.158 ms |
-| mixer on silence with the meter, 10 ms chunk | 0.158 ms | 0.173 ms |
-| true peak, 10 ms chunk | 0.0106 ms | 0.0124 ms |
-| loudness and true peak, 10 ms chunk | 0.031 ms | 0.036 ms |
+| filter | 0.245 ms | 0.265 ms |
+| mixer on silence with the meter | 0.315 ms | 0.347 ms |
+| true peak | 0.028 ms | 0.030 ms |
+| loudness and true peak | 0.063 ms | 0.069 ms |
 
 `bench.py --out rows.jsonl --sha <commit>` writes one row.
 
@@ -219,7 +219,7 @@ One chunk at 24 kHz, the 8 effect chain above, mean of 1000 chunks, median of 4 
   pipecat 1.10.0 and holds for each output mixer.
 - The chain runs on each chunk, silence included, so attack and release stay continuous through
   silence. At the stock `audio_out_10ms_chunks` of 4, one idle session costs 25 silent chunks of
-  40 ms a second.
+  40 ms a second, 7.9 ms of compute a second on the [Cost](#cost) machine.
 - `Compressor` and `DeEsser` set the gain of each 1 ms block from the peak of that block. `AGC`
   sets one target per chunk from the loudness at the chunk end. Each gain reads ahead inside its
   chunk, by up to 1 ms or 1 chunk.

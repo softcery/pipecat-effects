@@ -1,6 +1,6 @@
 """Renders the README clips. One mono int16 wav in, one wav and one mp4 per chain out.
 
-It runs each chain in 20 ms chunks, as a transport does. ffmpeg draws the waveform and
+It runs each chain in the stock output chunk of pipecat. ffmpeg draws the waveform and
 muxes the mp4.
 """
 
@@ -12,10 +12,12 @@ import subprocess
 import wave
 from pathlib import Path
 
+from pipecat.transports.base_transport import TransportParams
+
 from chains import BROADCAST, EQ_COMPRESSION, ROOM, TELEPHONE
 from pipecat_effects import Effects, EffectsFilter
 
-CHUNK_MS = 20
+CHUNK_MS = 10 * TransportParams().audio_out_10ms_chunks  # stock output chunk of pipecat
 PICTURE = "showwavespic=s=1280x320:colors=0x2f6feb"
 
 CHAINS: dict[str, Effects] = {

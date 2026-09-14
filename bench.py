@@ -14,6 +14,7 @@ from statistics import mean
 from typing import Any
 
 import numpy as np
+from pipecat.transports.base_transport import TransportParams
 
 from examples.chains import EQ_COMPRESSION
 from pipecat_effects import EffectsFilter, FilterMixer, Meter
@@ -22,8 +23,7 @@ from pipecat_effects.primitives import Fir
 
 RUNS = 1000
 RATE = 24000
-CHUNK_MS = 20.0
-IDLE_MS = 10.0
+CHUNK_MS = 10 * TransportParams().audio_out_10ms_chunks  # stock output chunk of pipecat
 
 
 def main() -> None:
@@ -57,7 +57,7 @@ async def _idle(rate: int) -> dict[str, float]:
     """Gives cost of one silent chunk, chain at rest."""
     mixer = FilterMixer(EffectsFilter(EQ_COMPRESSION), channels=1)
     await mixer.start(rate)
-    silence = bytes(2 * int(rate * IDLE_MS / 1000.0))
+    silence = bytes(2 * int(rate * CHUNK_MS / 1000.0))
     await mixer.mix(silence)
     return await _timed(lambda: mixer.mix(silence))
 
@@ -65,7 +65,7 @@ async def _idle(rate: int) -> dict[str, float]:
 def _peak(rate: int) -> dict[str, float]:
     """Gives cost of one true peak reading."""
     peak = Fir(TRUE_PEAK_TAPS, factor=OVERSAMPLE)
-    chunk = _samples(rate, IDLE_MS)
+    chunk = _samples(rate, CHUNK_MS)
     return _spread([_once(lambda: np.abs(peak.run(chunk)).max()) for _ in range(RUNS)])
 
 
@@ -73,7 +73,7 @@ def _meter(rate: int) -> dict[str, float]:
     """Gives cost of both readings."""
     meter = Meter()
     meter.start(rate)
-    chunk = _samples(rate, IDLE_MS)
+    chunk = _samples(rate, CHUNK_MS)
     return _spread([_once(lambda: meter.write(chunk)) for _ in range(RUNS)])
 
 
