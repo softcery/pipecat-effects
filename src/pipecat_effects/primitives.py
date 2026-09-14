@@ -272,8 +272,6 @@ def _cookbook(
                     plus - minus * cos - shelf,
                 ),
             )
-        case _:
-            raise ValueError(f"kind: expected one of {KINDS}, got a name outside them")
 
 
 def _poles(cos: float, alpha: float) -> tuple[float, float, float]:

@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 from pipecat.transports.base_transport import TransportParams
 
-from examples.chains import EQ_COMPRESSION
+from chains import EQ_COMPRESSION
 from pipecat_effects import EffectsFilter, FilterMixer, Meter
 from pipecat_effects.meter import OVERSAMPLE, TRUE_PEAK_TAPS
 from pipecat_effects.primitives import Fir

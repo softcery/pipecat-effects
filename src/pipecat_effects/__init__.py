@@ -2,6 +2,7 @@
 
 from pipecat_effects.effects import (
     AGC,
+    Apply,
     Biquad,
     Compressor,
     DeEsser,
@@ -15,9 +16,11 @@ from pipecat_effects.effects import (
 from pipecat_effects.filter import EffectsFilter
 from pipecat_effects.meter import Meter, Reading
 from pipecat_effects.mixer import FilterMixer
+from pipecat_effects.primitives import Kind, Samples
 
 __all__ = [
     "AGC",
+    "Apply",
     "Biquad",
     "Compressor",
     "DeEsser",
@@ -26,9 +29,11 @@ __all__ = [
     "EffectsFilter",
     "FilterMixer",
     "Gain",
+    "Kind",
     "Limiter",
     "Meter",
     "Reading",
     "Reverb",
+    "Samples",
     "Saturation",
 ]

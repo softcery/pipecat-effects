@@ -2,7 +2,8 @@
 
 Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One filter, 8 effects
 and one loudness meter. You build the chain. The chain adds 0 samples of latency.
-The package ships a `py.typed` marker.
+The package ships a `py.typed` marker and exports `Effect`, `Apply` and `Samples` for a
+caller who writes an effect.
 
 CI tests the package on `uv.lock` and on the lowest allowed pipecat-ai, numpy and scipy.
 
@@ -64,8 +65,8 @@ python examples/bot.py
 
 One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 40 ms chunks, the stock output
 chunk of pipecat. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips
-with ffmpeg. GitHub mutes each player at load. Unmute it to listen. Loudness is integrated,
-measured by ffmpeg `ebur128`.
+with ffmpeg. Each player shows the waveform and plays the clip. GitHub mutes each player at
+load. Unmute it to listen. Loudness is integrated, measured by ffmpeg `ebur128`.
 
 ### Unprocessed
 
@@ -178,9 +179,12 @@ await worker.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=
   is not heard.
 - `FilterMixer` maps the 2 mixer frames to `FilterEnableFrame` and `FilterUpdateSettingsFrame`.
   Call `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
-- An `effects` value outside a sequence of effects raises `TypeError` that names the field.
+- An `effects` value outside a sequence of effects raises `TypeError` that names the field. An
+  item whose `start` gives no callable raises `TypeError` that names the field and the index.
 - A chain that fails to build raises `ValueError` that names the `effects` field. The old chain
   keeps running.
+- An update before `start` builds at `start`. A failed build then raises at `start` and names the
+  field of the effect, not `effects`.
 
 ## Meter
 
@@ -209,7 +213,7 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 | true peak | 0.028 ms | 0.030 ms |
 | loudness and true peak | 0.063 ms | 0.069 ms |
 
-`bench.py --out rows.jsonl --sha <commit>` writes one row.
+`python examples/bench.py --out rows.jsonl --sha <commit>` writes one row.
 
 ## Limits
 
@@ -245,7 +249,7 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
   `DeEsser` sits at 6500 Hz.
 - One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
   24 kHz rate.
-- A chunk of 0 samples passes through. The primitives need 1 sample or more.
+- A chunk of 0 samples passes through. An odd byte count raises `ValueError` that names `audio`.
 - `Reverb` takes `decay_ms` to 500. A hall reverb needs convolution, which is not included.
 - Pitch shift, formant shift, lookahead and convolution are not included.
 - `FilterMixer` holds the meter. If pipecat takes an output filter field on `TransportParams`,

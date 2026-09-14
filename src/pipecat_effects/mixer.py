@@ -18,7 +18,7 @@ from pipecat_effects.primitives import SILENCE
 
 
 class FilterMixer(BaseAudioMixer):
-    """Runs one filter on the output, until audio_out_filter merges. It meters each chunk."""
+    """Runs one filter on the output and meters each chunk."""
 
     def __init__(self, audio_filter: BaseAudioFilter, *, channels: int) -> None:
         self._filter = audio_filter
