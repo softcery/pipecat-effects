@@ -61,9 +61,8 @@ python examples/bot.py
 
 One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 40 ms chunks, the stock output
 chunk of pipecat. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips
-with ffmpeg. Each player shows the waveform and plays the clip. GitHub mutes each player at
-load. Unmute it to listen. On PyPI each player is a link to GitHub. Loudness is integrated,
-measured by ffmpeg `ebur128`.
+with ffmpeg. GitHub mutes each player at load. Unmute it to listen. On PyPI each player is a
+link. Loudness is integrated, measured by ffmpeg `ebur128`.
 
 ### Unprocessed
 
@@ -108,8 +107,6 @@ Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.5 dBTP.
 - Give `FilterMixer` the `audio_out_channels` value as `channels`. `start` raises over 1 channel.
 - Each effect validates its values at build time. A value outside the range raises `ValueError`
   that names the field and the range.
-
-The chain in [Use](#use) is one example. [Listen](#listen) compares it with 3 other chains.
 
 ## Effects
 
