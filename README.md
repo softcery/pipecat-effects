@@ -18,6 +18,7 @@ pip install pipecat-effects
 ## Use
 
 Pipecat 1.10.0 has no output filter field. `FilterMixer` runs the filter as the output mixer.
+Tested with pipecat 1.10.0.
 
 ```python
 from pipecat.transports.base_transport import TransportParams
@@ -274,4 +275,4 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 
 ## License
 
-BSD 2-Clause.
+BSD 2-Clause. [Softcery](https://softcery.com) builds and maintains the package.
