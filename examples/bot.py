@@ -46,7 +46,7 @@ CHAIN: Effects = (
 
 
 async def bot(runner_args: RunnerArguments) -> None:
-    """Runs one session. The filter shapes each output chunk."""
+    """Runs one session. The filter processes each output chunk."""
     transport = await create_transport(runner_args, {"webrtc": params})
     key = os.environ["OPENAI_API_KEY"]
     context = LLMContext([{"role": "system", "content": PROMPT}])

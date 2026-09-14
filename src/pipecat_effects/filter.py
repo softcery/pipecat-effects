@@ -19,7 +19,7 @@ SETTING = "effects"  # update frame key of a new chain
 
 
 class EffectsFilter(BaseAudioFilter):
-    """Shapes spoken audio. It adds 0 samples of latency and runs on mono."""
+    """Processes spoken audio. It adds 0 samples of latency and runs on mono."""
 
     def __init__(self, effects: Sequence[Effect]) -> None:
         self.meter = Meter()

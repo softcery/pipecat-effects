@@ -28,7 +28,7 @@ CHUNK_MS = 20
 PICTURE = "showwavespic=s=1280x320:colors=0x2f6feb"
 
 CHAINS: dict[str, Effects] = {
-    "voice": (
+    "eq-compression": (
         AGC(target_lufs=-20.0),
         Biquad(kind="highpass", hz=90.0),
         Biquad(kind="lowshelf", hz=200.0, gain_db=2.5),
@@ -47,13 +47,12 @@ CHAINS: dict[str, Effects] = {
         Limiter(ceiling_db=-1.0, knee_db=3.0),
     ),
     "broadcast": (
-        AGC(target_lufs=-16.0),
-        Biquad(kind="highpass", hz=80.0),
+        AGC(target_lufs=-20.0),
+        Biquad(kind="highpass", hz=100.0),
         DeEsser(hz=6500.0, threshold_db=-30.0, ratio=5.0),
-        Compressor(threshold_db=-24.0, ratio=6.0, attack_ms=2.0, release_ms=120.0, makeup_db=6.0),
-        Biquad(kind="peak", hz=3000.0, q=1.0, gain_db=3.0),
-        Saturation(drive=2.0, mix=0.25),
-        Limiter(ceiling_db=-1.0, knee_db=4.0),
+        Compressor(threshold_db=-30.0, ratio=4.0, attack_ms=0.5, release_ms=60.0, makeup_db=18.0),
+        Biquad(kind="peak", hz=3500.0, q=0.8, gain_db=4.0),
+        Limiter(ceiling_db=-1.0, knee_db=2.0),
     ),
     "room": (
         AGC(target_lufs=-20.0),
@@ -64,11 +63,11 @@ CHAINS: dict[str, Effects] = {
 
 
 def main() -> None:
-    """Writes the dry clip and one clip per chain."""
+    """Writes the unprocessed clip and one clip per chain."""
     parsed = _arguments()
-    rate, audio = _read(parsed.dry)
+    rate, audio = _read(parsed.speech)
     parsed.out.mkdir(parents=True, exist_ok=True)
-    _clip(parsed.out / "dry", rate, audio)
+    _clip(parsed.out / "unprocessed", rate, audio)
     for name, chain in CHAINS.items():
         _clip(parsed.out / name, rate, asyncio.run(_shaped(chain, rate, audio)))
 
@@ -87,7 +86,7 @@ def _read(path: Path) -> tuple[int, bytes]:
     with wave.open(str(path), "rb") as taken:
         if taken.getnchannels() != 1 or taken.getsampwidth() != 2:
             raise ValueError(
-                f"dry: expected mono int16, got {taken.getnchannels()} channels "
+                f"speech: expected mono int16, got {taken.getnchannels()} channels "
                 f"of {8 * taken.getsampwidth()} bits"
             )
         return taken.getframerate(), taken.readframes(taken.getnframes())
@@ -116,9 +115,9 @@ def _ffmpeg(*arguments: str | Path) -> None:
 
 
 def _arguments() -> argparse.Namespace:
-    """Reads the dry wav and the output folder."""
+    """Reads the speech wav and the output folder."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry", type=Path, required=True, help="mono int16 wav of speech")
+    parser.add_argument("--speech", type=Path, required=True, help="mono int16 wav of speech")
     parser.add_argument("--out", type=Path, required=True, help="folder of the clips")
     return parser.parse_args()
 

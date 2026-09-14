@@ -14,7 +14,7 @@ pip install pipecat-effects
 
 ## Use
 
-Pipecat has no output filter field yet, so `FilterMixer` carries the filter as the output mixer.
+Pipecat has no output filter field yet, so `FilterMixer` runs the filter as the output mixer.
 
 ```python
 from pipecat.transports.base_transport import TransportParams
@@ -58,17 +58,18 @@ One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 20 ms chunks as a
 does. `examples/clips.py` holds each chain and renders the clips with ffmpeg. GitHub mutes each
 player at load. Unmute it to listen. Loudness is integrated, measured by ffmpeg `ebur128`.
 
-### Dry
+### Unprocessed
 
 https://github.com/user-attachments/assets/db4aec5b-0c94-4f29-95b0-343d64e6c718
 
 No filter. -18.3 LUFS, -1.3 dBTP.
 
-### Voice
+### EQ and compression
 
 https://github.com/user-attachments/assets/b0503417-de1f-47bd-90e0-1152c1e9d34a
 
-The chain in [Use](#use): low boost, high cut, de-esser, 3:1 compressor. -23.2 LUFS, -5.4 dBTP.
+The chain in [Use](#use): 2.5 dB low shelf at 200 Hz, 2 dB cut at 3.2 kHz, de-esser, 3:1
+compressor. -23.2 LUFS, -5.4 dBTP.
 
 ### Telephone
 
@@ -78,15 +79,16 @@ https://github.com/user-attachments/assets/dcb91965-4ee8-4227-b445-88c6d366de87
 
 ### Broadcast
 
-https://github.com/user-attachments/assets/153a9e6e-f418-403f-ab53-7dc24da19081
+https://github.com/user-attachments/assets/e0a58689-c594-4ff4-8a63-84776262fd14
 
-AGC at -16 LUFS, de-esser, 6:1 compressor, +3 dB at 3000 Hz. -22.9 LUFS, -6.9 dBTP.
+100 Hz high-pass, de-esser, 4:1 compressor with 0.5 ms attack and 18 dB makeup, +4 dB at 3.5 kHz.
+-16.3 LUFS, -1.4 dBTP. Against the unprocessed clip: +2.0 LU, and +3.7 dB from 2 to 4 kHz.
 
 ### Room
 
 https://github.com/user-attachments/assets/fd63f979-ba8f-4652-a544-b967fd25f1a6
 
-Reverb with 400 ms decay at 0.3 mix. -21.1 LUFS, -3.4 dBTP.
+Schroeder reverb, 400 ms decay, 0.3 mix. -21.1 LUFS, -3.4 dBTP.
 
 ## Build a chain
 
@@ -98,7 +100,7 @@ Reverb with 400 ms decay at 0.3 mix. -21.1 LUFS, -3.4 dBTP.
 - Each effect validates its values at build time. A value outside the range raises `ValueError`
   that names the field and the range.
 
-The chain in [Use](#use) is one voicing. [Listen](#listen) compares it with 3 other chains.
+The chain in [Use](#use) is one example. [Listen](#listen) compares it with 3 other chains.
 
 ## Effects
 
@@ -129,18 +131,21 @@ The chain in [Use](#use) is one voicing. [Listen](#listen) compares it with 3 ot
 | | `attack_ms` | 1.0 | 0 to 200 |
 | | `release_ms` | 40.0 | 1 to 2000 |
 
+`mix` sets the dry/wet ratio. 0 gives only the input, the dry signal. 1 gives only the processed
+signal, the wet signal.
+
 Method of each effect:
 
 | effect | method |
 | --- | --- |
 | `Gain` | one multiply |
-| `Biquad` | one second-order section, RBJ cookbook |
-| `Saturation` | `tanh(drive * x) / tanh(drive)`, dry and wet sum |
+| `Biquad` | one second-order section, Audio EQ Cookbook by Robert Bristow-Johnson |
+| `Saturation` | tanh waveshaper, `tanh(drive * x) / tanh(drive)`, dry/wet mix |
 | `Compressor` | one envelope follower |
-| `AGC` | K-weighted loudness over 400 ms, ramped gain |
-| `Limiter` | soft knee, hard bound on sample peaks |
-| `Reverb` | 4 comb lines and 2 allpass lines, Schroeder |
-| `DeEsser` | one band, taken out by its envelope |
+| `AGC` | K-weighted loudness over 400 ms, gain ramped at `max_db_per_second` or less |
+| `Limiter` | memoryless soft clipper, soft knee, hard ceiling on sample peaks |
+| `Reverb` | Schroeder reverberator, 4 comb filters and 2 allpass filters |
+| `DeEsser` | split-band, the envelope of one band-pass band sets the cut of that band |
 
 ## Control
 
@@ -193,19 +198,25 @@ commit 859e13c.
 - The filter runs on mono. `FilterMixer.start` raises on more than 1 channel.
 - A flush with an output mixer never goes quiet, so `flush_pipeline` waits out its caller. The
   defect is in pipecat, and it holds for every output mixer.
-- The chain runs on every chunk, silence included, so each follower keeps its time. One idle
-  session costs 100 silent chunks a second.
-- `AGC` reads momentary loudness without the gate of BS.1770. Under -50 LUFS the gain holds.
-- `AGC` sets the level at its place in the chain. Later stages move the output level. The
-  broadcast clip holds `AGC(target_lufs=-16.0)` and measures -22.9 LUFS.
-- The limiter bounds sample peaks. The -1 dB ceiling leaves the margin for inter-sample peaks at
-  a codec resampler. The true peak meter reports, it does not bound.
-- A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the bound and the rate.
+- The chain runs on every chunk, silence included, so attack and release stay continuous through
+  silence. One idle session costs 100 silent chunks a second.
+- `AGC` reads momentary loudness without the gate of ITU-R BS.1770, the loudness standard. Under
+  -50 LUFS the gain holds.
+- `AGC` sets the level at its place in the chain. Later stages move the output level. The EQ and
+  compression clip holds `AGC(target_lufs=-20.0)` and measures -23.2 LUFS.
+- `Limiter` is a memoryless soft clipper. It has no attack or release, so a signal driven far
+  over the ceiling distorts.
+- The -1 dB ceiling leaves the margin for inter-sample peaks at a codec resampler. The true peak
+  meter only reports.
+- The package has no limiter with lookahead. The broadcast clip holds a peak-to-loudness ratio,
+  true peak minus loudness, of 14.9 dB. The unprocessed clip holds 17.0 dB.
+- A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the highest allowed
+  centre and the rate.
 - One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
   24 kHz rate.
 - A chunk of 0 samples passes through. The primitives need 1 sample or more.
-- `Reverb` takes `decay_ms` to 500. A hall needs convolution and stays out.
-- Pitch, formant, lookahead and convolution stay out.
+- `Reverb` takes `decay_ms` to 500. A hall reverb needs convolution, which is not included.
+- Pitch shift, formant shift, lookahead and convolution are not included.
 - `FilterMixer` goes away when pipecat takes an output filter field on `TransportParams`.
 
 ## License

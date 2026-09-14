@@ -1,4 +1,4 @@
-"""Mixer adapter. It carries one filter on the output."""
+"""Mixer adapter. It runs one filter on the output."""
 
 from __future__ import annotations
 

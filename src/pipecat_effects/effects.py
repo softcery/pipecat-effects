@@ -49,7 +49,7 @@ class Gain:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Biquad:
-    """One cookbook section."""
+    """One second-order section from the Audio EQ Cookbook."""
 
     kind: str
     hz: float
@@ -74,7 +74,7 @@ class Biquad:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Saturation:
-    """Memoryless tanh shape, dry and wet sum."""
+    """Memoryless tanh waveshaper with a dry/wet mix."""
 
     drive: float = 2.0
     mix: float = 1.0
@@ -84,7 +84,7 @@ class Saturation:
         _within("mix", self.mix, 0.0, 1.0)
 
     def start(self, rate: int) -> Apply:
-        """Gives one shape call, unity at full scale."""
+        """Gives one waveshaper call, unity at full scale."""
         drive = np.float32(self.drive)
         wet = np.float32(self.mix / math.tanh(self.drive))
         dry = np.float32(1.0 - self.mix)
@@ -150,7 +150,7 @@ class AGC:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Limiter:
-    """Soft knee under the ceiling, hard bound at it."""
+    """Memoryless soft clipper. Soft knee under the ceiling, hard ceiling at it."""
 
     ceiling_db: float = -1.0
     knee_db: float = 3.0
@@ -160,7 +160,7 @@ class Limiter:
         _within("knee_db", self.knee_db, 0.0, 12.0)
 
     def start(self, rate: int) -> Apply:
-        """Memoryless shape, 0 samples over the ceiling."""
+        """Memoryless curve, 0 samples over the ceiling."""
         ceiling = np.float32(_linear(self.ceiling_db))
         knee = np.float32(_linear(self.ceiling_db - self.knee_db))
         width = np.float32(2.0 * (ceiling - knee))
@@ -176,7 +176,7 @@ class Limiter:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Reverb:
-    """Four comb lines, 2 allpass lines, Schroeder delays."""
+    """Schroeder reverberator. Four comb filters, 2 allpass filters."""
 
     decay_ms: float = 200.0
     mix: float = 0.15
@@ -215,7 +215,7 @@ class Reverb:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeEsser:
-    """One band, one envelope, band out by gain."""
+    """Split-band de-esser. The envelope of one band-pass band sets the cut of that band."""
 
     hz: float = 6500.0
     q: float = 1.5

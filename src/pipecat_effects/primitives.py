@@ -21,7 +21,7 @@ SILENCE = -120.0  # floor of one level reading
 
 
 class Section:
-    """One second-order section on sosfilt, or a cascade of them, with cookbook coefficients."""
+    """One second-order section on sosfilt, or a cascade, with Audio EQ Cookbook coefficients."""
 
     def __init__(self, sos: Sequence[float] | Sequence[Sequence[float]]) -> None:
         self._sos = np.asarray(sos, dtype=np.float64).reshape(-1, 6)
