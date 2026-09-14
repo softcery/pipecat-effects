@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 from pipecat.frames.frames import FilterUpdateSettingsFrame
-from pipecat_effects import WARM, EffectsFilter, Gain, Reverb
+
+from pipecat_effects import Compressor, EffectsFilter, Gain, Reverb
 
 RATE = 24000
 CHUNK = 480
@@ -40,7 +41,7 @@ async def test_an_update_payload_outside_a_sequence_names_the_effects_field():
 
 
 async def test_a_chunk_of_0_samples_passes_through():
-    effects = EffectsFilter(WARM)
+    effects = EffectsFilter([Compressor(), Gain(db=1.0)])
     await effects.start(RATE)
 
     assert await effects.filter(b"") == b""

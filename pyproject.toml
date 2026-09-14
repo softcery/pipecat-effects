@@ -1,7 +1,7 @@
 [project]
 name = "pipecat-effects"
 version = "0.1.0"
-description = "Output audio effects for pipecat. One filter, 8 effects, 3 presets and a loudness meter."
+description = "Output audio effects for pipecat. One filter, 8 effects and a loudness meter."
 readme = "README.md"
 license = "BSD-2-Clause"
 license-files = ["LICENSE"]
@@ -20,13 +20,28 @@ dependencies = [
 ]
 
 [project.urls]
-Source = "https://github.com/softcery/scs-agent/tree/main/plugins/effects"
+Source = "https://github.com/softcery/pipecat-effects"
+Issues = "https://github.com/softcery/pipecat-effects/issues"
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "UP", "B",
+    "SIM", "C4", "RUF", "PTH", "RET", "ASYNC", "T20", "ERA",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pipecat_effects"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

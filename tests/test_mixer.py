@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
-from pipecat_effects import WARM, EffectsFilter, FilterMixer, Reverb
+
+from pipecat_effects import EffectsFilter, FilterMixer, Gain, Reverb
 
 RATE = 24000
 CHUNK = 480
@@ -8,7 +9,7 @@ LEVEL = 16384  # int16 sample at half of full scale
 
 
 async def test_start_refuses_more_than_1_channel():
-    mixer = FilterMixer(EffectsFilter(WARM), channels=2)
+    mixer = FilterMixer(EffectsFilter([Gain(db=1.0)]), channels=2)
 
     with pytest.raises(ValueError, match="audio_out_channels") as raised:
         await mixer.start(RATE)
@@ -27,7 +28,7 @@ async def test_the_mixer_runs_the_chain_on_a_silent_chunk():
 
 
 async def test_the_reading_gives_the_loudness_and_the_true_peak():
-    mixer = FilterMixer(EffectsFilter(WARM))
+    mixer = FilterMixer(EffectsFilter([Gain(db=1.0)]))
     await mixer.start(RATE)
 
     await mixer.mix(np.full(CHUNK, LEVEL, dtype=np.int16).tobytes())

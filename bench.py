@@ -14,13 +14,37 @@ from statistics import mean
 from typing import Any
 
 import numpy as np
-from pipecat_effects import WARM, EffectsFilter, FilterMixer, Fir, Meter
+
+from pipecat_effects import (
+    AGC,
+    Biquad,
+    Compressor,
+    DeEsser,
+    Effects,
+    EffectsFilter,
+    FilterMixer,
+    Fir,
+    Limiter,
+    Meter,
+    Saturation,
+)
 from pipecat_effects.meter import OVERSAMPLE, TRUE_PEAK_TAPS
 
 RUNS = 1000
 RATE = 24000
 CHUNK_MS = 20.0
 IDLE_MS = 10.0
+
+CHAIN: Effects = (
+    AGC(target_lufs=-20.0),
+    Biquad(kind="highpass", hz=90.0),
+    Biquad(kind="lowshelf", hz=200.0, gain_db=2.5),
+    Biquad(kind="peak", hz=3200.0, q=1.2, gain_db=-2.0),
+    DeEsser(hz=6500.0, threshold_db=-32.0, ratio=4.0),
+    Compressor(threshold_db=-20.0, ratio=3.0, attack_ms=8.0, release_ms=120.0, makeup_db=2.0),
+    Saturation(drive=1.2, mix=0.15),
+    Limiter(ceiling_db=-1.0, knee_db=3.0),
+)
 
 
 def main() -> None:
@@ -43,8 +67,8 @@ def main() -> None:
 
 
 async def _filter(rate: int) -> dict[str, float]:
-    """Gives cost of one warm speech chunk."""
-    effects = EffectsFilter(WARM)
+    """Gives cost of one speech chunk through the 8 stage chain."""
+    effects = EffectsFilter(CHAIN)
     await effects.start(rate)
     audio = _speech(rate, CHUNK_MS)
     return await _timed(lambda: effects.filter(audio))
@@ -52,7 +76,7 @@ async def _filter(rate: int) -> dict[str, float]:
 
 async def _idle(rate: int) -> dict[str, float]:
     """Gives cost of one silent chunk, chain at rest."""
-    mixer = FilterMixer(EffectsFilter(WARM))
+    mixer = FilterMixer(EffectsFilter(CHAIN))
     await mixer.start(rate)
     silence = bytes(2 * int(rate * IDLE_MS / 1000.0))
     await mixer.mix(silence)

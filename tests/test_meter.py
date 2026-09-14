@@ -1,4 +1,5 @@
 import numpy as np
+
 from pipecat_effects import Meter
 
 RATE = 24000

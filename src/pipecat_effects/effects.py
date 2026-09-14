@@ -29,6 +29,9 @@ class Effect(Protocol):
         """Builds primitives of this stage."""
 
 
+Effects = tuple[Effect, ...]
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Gain:
     """One multiply."""

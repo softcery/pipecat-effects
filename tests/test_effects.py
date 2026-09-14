@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from pipecat_effects import AGC, Biquad, Compressor, Limiter, Meter, Saturation
 
 RATE = 24000
