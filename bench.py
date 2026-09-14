@@ -23,12 +23,12 @@ from pipecat_effects import (
     Effects,
     EffectsFilter,
     FilterMixer,
-    Fir,
     Limiter,
     Meter,
     Saturation,
 )
 from pipecat_effects.meter import OVERSAMPLE, TRUE_PEAK_TAPS
+from pipecat_effects.primitives import Fir
 
 RUNS = 1000
 RATE = 24000
