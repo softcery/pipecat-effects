@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -22,6 +22,7 @@ ALLPASS_FEEDBACK = 0.5
 SCHROEDER_RATE = 44100
 
 
+@runtime_checkable
 class Effect(Protocol):
     """One stage. start gives one apply call."""
 

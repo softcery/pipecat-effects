@@ -9,7 +9,7 @@ import numpy as np
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame, FilterEnableFrame, FilterUpdateSettingsFrame
 
-from pipecat_effects.effects import Apply, Biquad, Effects
+from pipecat_effects.effects import Apply, Biquad, Effect, Effects
 from pipecat_effects.primitives import Samples, Section
 
 SCALE = 32768.0  # int16 full scale
@@ -73,13 +73,15 @@ class EffectsFilter(BaseAudioFilter):
         if self._rate:
             try:
                 self._chain = _started(effects, self._rate)
-            except ValueError as error:
-                raise ValueError(f"{SETTING}: {error}") from error
+            except (TypeError, ValueError) as error:
+                raise type(error)(f"{SETTING}: {error}") from error
         self._effects = effects
 
 
 def decoded(audio: bytes) -> Samples:
-    """Gives one int16 chunk as float32 samples, full scale at 1.0."""
+    """Gives one int16 chunk as float32 samples, full scale at 1.0. An odd byte count raises."""
+    if len(audio) % 2:
+        raise ValueError(f"audio: expected int16 bytes, an even count, got {len(audio)} bytes")
     return np.frombuffer(audio, dtype=np.int16).astype(np.float32) / SCALE
 
 
@@ -87,15 +89,21 @@ def _started(effects: Effects, rate: int) -> list[Apply]:
     """Starts each effect. Adjacent biquads run as one cascade in one sosfilt call."""
     chain: list[Apply] = []
     rows: list[tuple[float, ...]] = []
-    for effect in (*effects, None):
+    for index, effect in enumerate((*effects, None)):
         if isinstance(effect, Biquad):
             rows.append(effect.row(rate))
             continue
         if rows:
             chain.append(Section(rows).run)
             rows = []
-        if effect is not None:
-            chain.append(effect.start(rate))
+        if effect is None:
+            continue
+        stage = effect.start(rate)
+        if not callable(stage):
+            raise TypeError(
+                f"index {index}: expected start to give a callable, got {type(stage).__name__}"
+            )
+        chain.append(stage)
     return chain
 
 
@@ -108,7 +116,7 @@ def _through(chain: Sequence[Apply], x: Samples) -> Samples:
 
 def _faded(before: Samples, after: Samples) -> Samples:
     """Fades linearly from one output to the other over 1 chunk."""
-    ramp = np.linspace(0.0, 1.0, before.size, dtype=np.float32)
+    ramp = np.linspace(0.0, 1.0, before.size + 1, dtype=np.float32)[1:]
     return before * (1.0 - ramp) + after * ramp
 
 
@@ -118,7 +126,7 @@ def _sequence(effects: Any) -> Effects:
         raise TypeError(
             f"{SETTING}: expected a sequence of effects, got one {type(effects).__name__}"
         )
-    outside = sum(1 for effect in effects if not hasattr(effect, "start"))
+    outside = sum(1 for effect in effects if not isinstance(effect, Effect))
     if outside:
         raise TypeError(f"{SETTING}: expected each item to give start, got {outside} without it")
     return tuple(effects)

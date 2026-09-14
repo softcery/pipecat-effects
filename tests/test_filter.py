@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pipecat.frames.frames import FilterEnableFrame, FilterUpdateSettingsFrame
 
-from pipecat_effects import Biquad, Compressor, Effects, EffectsFilter, Gain, Reverb
+from pipecat_effects import Biquad, Compressor, Effects, EffectsFilter, Gain, Meter, Reverb
 
 RATE = 24000
 CHUNK = 480
@@ -83,6 +83,28 @@ async def test_an_update_payload_outside_a_sequence_names_the_effects_field():
 
     assert "got one int" in str(raised.value)
     assert "got 1 without it" in str(listed.value)
+
+
+async def test_an_odd_byte_count_names_the_audio_field():
+    effects = EffectsFilter([Gain(db=0.0)])
+    await effects.start(RATE)
+
+    with pytest.raises(ValueError, match="audio") as raised:
+        await effects.filter(b"\x00\x00\x00")
+
+    assert "got 3 bytes" in str(raised.value)
+
+
+async def test_an_update_with_a_start_that_gives_no_callable_keeps_the_old_chain():
+    effects = EffectsFilter([Gain(db=-6.0)])
+    await effects.start(RATE)
+    before = await effects.filter(AUDIO)
+
+    with pytest.raises(TypeError, match="effects: index 0") as raised:
+        await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": [Meter()]}))
+
+    assert "got NoneType" in str(raised.value)
+    assert await effects.filter(AUDIO) == before
 
 
 async def test_a_chunk_of_0_samples_passes_through():
