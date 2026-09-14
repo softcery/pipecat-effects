@@ -50,7 +50,13 @@ def transport_params() -> TransportParams:
     )
 ```
 
-`examples/bot.py` runs one voice bot with that chain.
+`examples/bot.py` runs one voice bot with that chain. It needs 4 pipecat extras and
+`OPENAI_API_KEY`.
+
+```
+pip install pipecat-effects "pipecat-ai[runner,webrtc,openai,silero]"
+python examples/bot.py
+```
 
 ## Listen
 
@@ -226,7 +232,7 @@ commit 859e13c.
 
 ## Develop
 
-- `make lint` checks the lock, the format, the lint rules and the types.
+- `make lint` checks the lock, the format, the lint rules, and the types with pyright.
 - `make test` runs the tests. `make test-lowest` runs them on the lowest allowed dependencies.
 - `make audit` checks `uv.lock` for known vulnerabilities.
 

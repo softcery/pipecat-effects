@@ -1,4 +1,7 @@
-"""One voice bot with an 8 stage chain on its output. Run it with the pipecat runner."""
+"""One voice bot with an 8 stage chain on its output. Run it with the pipecat runner.
+
+It needs pipecat-ai[runner,webrtc,openai,silero] and OPENAI_API_KEY.
+"""
 
 import os
 
