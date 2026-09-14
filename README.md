@@ -52,6 +52,42 @@ def transport_params() -> TransportParams:
 
 `examples/bot.py` runs one voice bot with that chain.
 
+## Listen
+
+One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 20 ms chunks as a transport
+does. `examples/clips.py` holds each chain and renders the clips with ffmpeg. GitHub mutes each
+player at load. Unmute it to listen. Loudness is integrated, measured by ffmpeg `ebur128`.
+
+### Dry
+
+https://github.com/user-attachments/assets/db4aec5b-0c94-4f29-95b0-343d64e6c718
+
+No filter. -18.3 LUFS, -1.3 dBTP.
+
+### Voice
+
+https://github.com/user-attachments/assets/b0503417-de1f-47bd-90e0-1152c1e9d34a
+
+The chain in [Use](#use): low boost, high cut, de-esser, 3:1 compressor. -23.2 LUFS, -5.4 dBTP.
+
+### Telephone
+
+https://github.com/user-attachments/assets/dcb91965-4ee8-4227-b445-88c6d366de87
+
+300 Hz to 3400 Hz band, 4:1 compressor, drive 3.0 at 0.3 mix. -22.0 LUFS, -5.0 dBTP.
+
+### Broadcast
+
+https://github.com/user-attachments/assets/153a9e6e-f418-403f-ab53-7dc24da19081
+
+AGC at -16 LUFS, de-esser, 6:1 compressor, +3 dB at 3000 Hz. -22.9 LUFS, -6.9 dBTP.
+
+### Room
+
+https://github.com/user-attachments/assets/fd63f979-ba8f-4652-a544-b967fd25f1a6
+
+Reverb with 400 ms decay at 0.3 mix. -21.1 LUFS, -3.4 dBTP.
+
 ## Build a chain
 
 - A chain is any sequence of effects. The filter runs them in order.
@@ -62,9 +98,7 @@ def transport_params() -> TransportParams:
 - Each effect validates its values at build time. A value outside the range raises `ValueError`
   that names the field and the range.
 
-The chain above is one voicing. It boosts 200 Hz, cuts 3200 Hz and holds -20 LUFS. A phone line
-sound takes a 300 Hz highpass and a 3400 Hz lowpass instead. A loud broadcast sound takes
-`AGC(target_lufs=-16.0)` and `Compressor(ratio=6.0)`.
+The chain in [Use](#use) is one voicing. [Listen](#listen) compares it with 3 other chains.
 
 ## Effects
 
@@ -162,6 +196,8 @@ commit 859e13c.
 - The chain runs on every chunk, silence included, so each follower keeps its time. One idle
   session costs 100 silent chunks a second.
 - `AGC` reads momentary loudness without the gate of BS.1770. Under -50 LUFS the gain holds.
+- `AGC` sets the level at its place in the chain. Later stages move the output level. The
+  broadcast clip holds `AGC(target_lufs=-16.0)` and measures -22.9 LUFS.
 - The limiter bounds sample peaks. The -1 dB ceiling leaves the margin for inter-sample peaks at
   a codec resampler. The true peak meter reports, it does not bound.
 - A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the bound and the rate.
