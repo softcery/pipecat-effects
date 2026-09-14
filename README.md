@@ -61,8 +61,9 @@ python examples/bot.py
 ## Listen
 
 One sentence of Cartesia sonic-3.5 speech, 24 kHz mono, run in 20 ms chunks as a transport
-does. `examples/clips.py` holds each chain and renders the clips with ffmpeg. GitHub mutes each
-player at load. Unmute it to listen. Loudness is integrated, measured by ffmpeg `ebur128`.
+does. `examples/chains.py` holds each chain. `examples/clips.py` renders the clips with ffmpeg.
+GitHub mutes each player at load. Unmute it to listen. Loudness is integrated, measured by
+ffmpeg `ebur128`.
 
 ### Unprocessed
 

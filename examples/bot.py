@@ -22,30 +22,10 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from pipecat_effects import (
-    AGC,
-    Biquad,
-    Compressor,
-    DeEsser,
-    Effects,
-    EffectsFilter,
-    FilterMixer,
-    Limiter,
-    Saturation,
-)
+from chains import EQ_COMPRESSION
+from pipecat_effects import EffectsFilter, FilterMixer
 
 PROMPT = "You are a voice assistant. Answer in one short sentence."
-
-CHAIN: Effects = (
-    AGC(target_lufs=-20.0),
-    Biquad(kind="highpass", hz=90.0),
-    Biquad(kind="lowshelf", hz=200.0, gain_db=2.5),
-    Biquad(kind="peak", hz=3200.0, q=1.2, gain_db=-2.0),
-    DeEsser(hz=6500.0, threshold_db=-32.0, ratio=4.0),
-    Compressor(threshold_db=-20.0, ratio=3.0, attack_ms=8.0, release_ms=120.0, makeup_db=2.0),
-    Saturation(drive=1.2, mix=0.15),
-    Limiter(ceiling_db=-1.0, knee_db=3.0),
-)
 
 
 async def bot(runner_args: RunnerArguments) -> None:
@@ -76,7 +56,7 @@ def params() -> TransportParams:
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_out_mixer=FilterMixer(EffectsFilter(CHAIN)),
+        audio_out_mixer=FilterMixer(EffectsFilter(EQ_COMPRESSION)),
     )
 
 
