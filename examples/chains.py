@@ -1,4 +1,4 @@
-"""The 4 chains of the README clips. Each one ends with Limiter."""
+"""The 4 chains of the README clips, by name. Each one ends with Limiter."""
 
 from pipecat_effects import AGC, Biquad, Compressor, DeEsser, Effects, Limiter, Reverb, Saturation
 
@@ -36,3 +36,10 @@ ROOM: Effects = (
     Reverb(decay_ms=400.0, mix=0.3),
     Limiter(ceiling_db=-1.0, knee_db=3.0),
 )
+
+CHAINS: dict[str, Effects] = {
+    "eq-compression": EQ_COMPRESSION,
+    "telephone": TELEPHONE,
+    "broadcast": BROADCAST,
+    "room": ROOM,
+}

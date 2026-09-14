@@ -60,9 +60,11 @@ def transport_params() -> TransportParams:
 `OPENAI_API_KEY`. The wheel has no `examples/`, so run it from a clone of this repository.
 
 ```
-pip install pipecat-effects "pipecat-ai[runner,webrtc,openai,silero]"
-python examples/bot.py
+uv run --with "pipecat-ai[runner,webrtc,openai,silero]" examples/bot.py --chain telephone
 ```
+
+`--chain` picks one of the 4 chains in [Listen](#listen). `--bypass` runs the session with the
+chain off. The log gives the loudness and the true peak of each bot turn.
 
 ## Listen
 

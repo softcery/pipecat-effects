@@ -14,18 +14,11 @@ from pathlib import Path
 
 from pipecat.transports.base_transport import TransportParams
 
-from chains import BROADCAST, EQ_COMPRESSION, ROOM, TELEPHONE
+from chains import CHAINS
 from pipecat_effects import Effects, EffectsFilter
 
 CHUNK_MS = 10 * TransportParams().audio_out_10ms_chunks  # stock output chunk of pipecat
 PICTURE = "showwavespic=s=1280x320:colors=0x2f6feb"
-
-CHAINS: dict[str, Effects] = {
-    "eq-compression": EQ_COMPRESSION,
-    "telephone": TELEPHONE,
-    "broadcast": BROADCAST,
-    "room": ROOM,
-}
 
 
 def main() -> None:
