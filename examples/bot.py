@@ -22,7 +22,7 @@ from pipecat.runner.run import main
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.services.openai.stt import OpenAISTTService
+from pipecat.services.openai.stt import OpenAIRealtimeSTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.workers.runner import WorkerRunner
@@ -33,6 +33,7 @@ from pipecat_effects import EffectsFilter, FilterMixer
 PROMPT = "You are a voice assistant. Answer in one short sentence."
 CHANNELS = 1
 CHAIN = "eq-compression"  # the default of --chain
+LLM = "gpt-4.1-mini"
 
 
 async def bot(runner_args: RunnerArguments) -> None:
@@ -47,9 +48,9 @@ async def bot(runner_args: RunnerArguments) -> None:
     pipeline = Pipeline(
         [
             transport.input(),
-            OpenAISTTService(api_key=key),
+            OpenAIRealtimeSTTService(api_key=key),
             aggregators.user(),
-            OpenAILLMService(api_key=key),
+            OpenAILLMService(api_key=key, settings=OpenAILLMService.Settings(model=LLM)),
             OpenAITTSService(api_key=key),
             transport.output(),
             aggregators.assistant(),
