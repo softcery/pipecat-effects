@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## 0.1.0, 2026-09-15
 
 - `EffectsFilter` on `BaseAudioFilter`. It runs the chain as given, with a bypass and a settings
   update that each fade over one chunk.
