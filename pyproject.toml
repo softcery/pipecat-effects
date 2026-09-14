@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Softcery" }]
 keywords = ["pipecat", "audio", "effects", "voice"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -27,10 +28,10 @@ Issues = "https://github.com/softcery/pipecat-effects/issues"
 
 [dependency-groups]
 dev = [
+    "pyright[nodejs]>=1.1.414",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.7",
-    "ty>=0.0.80",
 ]
 
 [tool.uv]
@@ -53,6 +54,9 @@ known-first-party = ["pipecat_effects"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+
+[tool.pyright]
+pythonVersion = "3.12"
 
 [tool.pytest]
 asyncio_mode = "auto"

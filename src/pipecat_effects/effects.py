@@ -11,7 +11,7 @@ import numpy as np
 
 from pipecat_effects.primitives import KINDS, Envelope, Line, Loudness, Samples, Section, row
 
-Apply = Callable[[Samples], Samples]
+type Apply = Callable[[Samples], Samples]
 
 FLOOR = 1e-9  # linear level that reads as silence
 HOLD_LUFS = -50.0  # under this loudness, gain holds
@@ -27,9 +27,10 @@ class Effect(Protocol):
 
     def start(self, rate: int) -> Apply:
         """Builds primitives of this stage."""
+        ...
 
 
-Effects = tuple[Effect, ...]
+type Effects = tuple[Effect, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

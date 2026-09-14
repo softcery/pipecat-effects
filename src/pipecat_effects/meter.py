@@ -13,7 +13,7 @@ from pipecat_effects.primitives import SILENCE, Fir, Loudness, Samples, dbfs
 OVERSAMPLE = 4
 TAPS = 48
 BAND = 1.0 / OVERSAMPLE  # cutoff at the input Nyquist, as part of the oversampled Nyquist
-TRUE_PEAK_TAPS = firwin(TAPS, BAND, window="blackman").astype(np.float32)
+TRUE_PEAK_TAPS = np.asarray(firwin(TAPS, BAND, window="blackman"), dtype=np.float32)
 
 
 @dataclass(frozen=True, slots=True)

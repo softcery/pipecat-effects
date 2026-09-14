@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import cmath
 import math
 from collections.abc import Sequence
 from functools import cache
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+from numpy.typing import NDArray
 from scipy.signal import sos2zpk, sosfilt, zpk2sos
 
-Samples = np.ndarray
+type Samples = NDArray[np.floating]
+type Roots = NDArray[np.complex128]
 
 KINDS = ("lowpass", "highpass", "bandpass", "peak", "lowshelf", "highshelf")
 NYQUIST_RATIO = 0.45  # highest centre, as part of the rate
@@ -75,7 +78,7 @@ class Envelope:
     def run(self, x: Samples) -> Samples:
         """Gives one followed level per sample. It steps once per block."""
         attack, release, step, value = self._attack, self._release, self._step, self._value
-        levels = []
+        levels: list[float] = []
         for peak in _peaks(x, self._block):
             pole = attack if peak > value else release
             moved = value + (1.0 - pole) * (peak - value)
@@ -282,19 +285,19 @@ def _k_weighting(rate: int) -> tuple[tuple[float, ...], ...]:
 
     Each zero and pole moves through the s plane. The gain keeps the response at K_MATCH_HZ.
     """
-    zeros, poles, gain = sos2zpk(K_SECTIONS)
+    zeros, poles, gain = map(np.asarray, sos2zpk(K_SECTIONS))
     zeros_at, poles_at = _moved(zeros, rate), _moved(poles, rate)
     gain_at = gain * _response(zeros, poles, K_RATE) / _response(zeros_at, poles_at, rate)
     return tuple(map(tuple, zpk2sos(zeros_at, poles_at, gain_at).tolist()))
 
 
-def _moved(roots: np.ndarray, rate: int) -> np.ndarray:
+def _moved(roots: Roots, rate: int) -> Roots:
     """Moves roots from K_RATE to this rate by the bilinear transform, through the s plane."""
     s = 2.0 * K_RATE * (roots - 1.0) / (roots + 1.0)
     return (2.0 * rate + s) / (2.0 * rate - s)
 
 
-def _response(zeros: np.ndarray, poles: np.ndarray, rate: int) -> float:
+def _response(zeros: Roots, poles: Roots, rate: int) -> float:
     """Gives the unit gain magnitude of these roots at K_MATCH_HZ."""
-    z = np.exp(2j * np.pi * K_MATCH_HZ / rate)
+    z = cmath.exp(2j * math.pi * K_MATCH_HZ / rate)
     return float(np.abs(np.prod(z - zeros) / np.prod(z - poles)))
