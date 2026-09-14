@@ -26,6 +26,7 @@ from chains import EQ_COMPRESSION
 from pipecat_effects import EffectsFilter, FilterMixer
 
 PROMPT = "You are a voice assistant. Answer in one short sentence."
+CHANNELS = 1
 
 
 async def bot(runner_args: RunnerArguments) -> None:
@@ -56,7 +57,8 @@ def params() -> TransportParams:
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_out_mixer=FilterMixer(EffectsFilter(EQ_COMPRESSION)),
+        audio_out_channels=CHANNELS,
+        audio_out_mixer=FilterMixer(EffectsFilter(EQ_COMPRESSION), channels=CHANNELS),
     )
 
 

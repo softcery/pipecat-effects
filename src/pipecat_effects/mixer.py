@@ -1,8 +1,6 @@
-"""Mixer adapter. It runs one filter on the output."""
+"""Mixer adapter. It runs one filter on the output and meters the result."""
 
 from __future__ import annotations
-
-from collections.abc import Mapping
 
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.audio.mixers.base_audio_mixer import BaseAudioMixer
@@ -14,25 +12,25 @@ from pipecat.frames.frames import (
     MixerUpdateSettingsFrame,
 )
 
-from pipecat_effects.filter import EffectsFilter
+from pipecat_effects.filter import decoded
+from pipecat_effects.meter import Meter, Reading
 from pipecat_effects.primitives import SILENCE
-
-DIGITS = 2  # digits of one reading
 
 
 class FilterMixer(BaseAudioMixer):
-    """Runs one filter on the output, until audio_out_filter merges."""
+    """Runs one filter on the output, until audio_out_filter merges. It meters each chunk."""
 
-    def __init__(self, audio_filter: BaseAudioFilter, *, channels: int = 1) -> None:
+    def __init__(self, audio_filter: BaseAudioFilter, *, channels: int) -> None:
         self._filter = audio_filter
         self._channels = channels
-        self._meter = audio_filter.meter if isinstance(audio_filter, EffectsFilter) else None
+        self._meter = Meter()
 
     async def start(self, sample_rate: int) -> None:
-        """Starts one filter. Over 1 channel raises."""
+        """Starts the filter and the meter. Over 1 channel raises."""
         if self._channels != 1:
-            raise ValueError(f"audio_out_channels: expected 1, got {self._channels} channels")
+            raise ValueError(f"channels: expected 1, got {self._channels}")
         await self._filter.start(sample_rate)
+        self._meter.start(sample_rate)
 
     async def stop(self) -> None:
         await self._filter.stop()
@@ -45,13 +43,12 @@ class FilterMixer(BaseAudioMixer):
             await self._filter.process_frame(FilterUpdateSettingsFrame(settings=frame.settings))
 
     async def mix(self, audio: bytes) -> bytes:
-        return await self._filter.filter(audio)
+        """Filters one chunk and meters the int16 result."""
+        mixed = await self._filter.filter(audio)
+        self._meter.write(decoded(mixed))
+        return mixed
 
-    def read(self) -> Mapping[str, float]:
-        """Gives loudness and true peak since one read. Silence gives no field."""
-        if self._meter is None:
-            return {}
+    def read(self) -> Reading | None:
+        """Gives loudness and true peak since the last read, then clears. Silence gives None."""
         reading = self._meter.read()
-        if reading.lufs <= SILENCE:
-            return {}
-        return {"lufs": round(reading.lufs, DIGITS), "dbtp": round(reading.dbtp, DIGITS)}
+        return None if reading.lufs <= SILENCE else reading

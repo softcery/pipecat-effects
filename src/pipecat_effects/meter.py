@@ -39,8 +39,8 @@ class Meter:
         self._top = 0.0
 
     def write(self, x: Samples) -> None:
-        """Takes one chunk, none before start."""
-        if self._loudness is None or self._peak is None:
+        """Takes one chunk. It skips a chunk before start and a chunk of 0 samples."""
+        if self._loudness is None or self._peak is None or not x.size:
             return
         self._loudness.run(x)
         self._top = max(self._top, float(np.abs(self._peak.run(x)).max(initial=0.0)))

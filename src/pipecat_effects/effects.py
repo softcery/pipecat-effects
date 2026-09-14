@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
 
-from pipecat_effects.primitives import KINDS, Envelope, Line, Loudness, Samples, Section, row
+from pipecat_effects.primitives import KINDS, Envelope, Kind, Line, Loudness, Samples, Section, row
 
 type Apply = Callable[[Samples], Samples]
 
@@ -30,7 +30,7 @@ class Effect(Protocol):
         ...
 
 
-type Effects = tuple[Effect, ...]
+type Effects = Sequence[Effect]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -52,7 +52,7 @@ class Gain:
 class Biquad:
     """One second-order section from the Audio EQ Cookbook."""
 
-    kind: str
+    kind: Kind
     hz: float
     q: float = 0.7071
     gain_db: float = 0.0

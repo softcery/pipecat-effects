@@ -1,12 +1,21 @@
 import numpy as np
 import pytest
-from pipecat.frames.frames import FilterUpdateSettingsFrame
+from pipecat.frames.frames import FilterEnableFrame, FilterUpdateSettingsFrame
 
-from pipecat_effects import Compressor, EffectsFilter, Gain, Reverb
+from pipecat_effects import Biquad, Compressor, Effects, EffectsFilter, Gain, Reverb
 
 RATE = 24000
 CHUNK = 480
 LEVEL = 16384  # int16 sample at half of full scale
+AUDIO = np.full(CHUNK, LEVEL, dtype=np.int16).tobytes()
+
+
+async def test_the_filter_appends_no_limiter():
+    effects = EffectsFilter([Gain(db=0.0)])
+    await effects.start(RATE)
+    top = np.full(CHUNK, 32767, dtype=np.int16).tobytes()
+
+    assert await effects.filter(top) == top
 
 
 async def test_a_settings_update_crossfades_without_a_step():
@@ -18,6 +27,15 @@ async def test_a_settings_update_crossfades_without_a_step():
     assert steps <= 6.0
 
 
+async def test_2_updates_inside_one_chunk_fade_from_the_chain_last_heard():
+    effects = EffectsFilter([Gain(db=0.0)])
+    await effects.start(RATE)
+
+    steps = await _updated(effects, [Gain(db=-12.0)], [Gain(db=-6.0)])
+
+    assert steps <= 6.0
+
+
 async def test_a_reverb_chain_crossfades_without_a_step():
     effects = EffectsFilter([Reverb(decay_ms=300.0, mix=0.5)])
     await effects.start(RATE)
@@ -25,6 +43,33 @@ async def test_a_reverb_chain_crossfades_without_a_step():
     steps = await _updated(effects, [Gain(db=0.0)])
 
     assert steps <= 6.0
+
+
+async def test_a_bypass_passes_the_input_and_each_switch_fades_without_a_step():
+    effects = EffectsFilter([Compressor()])
+    await effects.start(RATE)
+
+    chunks = [await effects.filter(AUDIO)]
+    await effects.process_frame(FilterEnableFrame(enable=False))
+    chunks += [await effects.filter(AUDIO) for _ in range(100)]
+    await effects.process_frame(FilterEnableFrame(enable=True))
+    chunks += [await effects.filter(AUDIO) for _ in range(2)]
+
+    assert chunks[-3] == AUDIO
+    assert chunks[-1] != AUDIO
+    assert _step_db(b"".join(chunks)) <= 6.0
+
+
+async def test_an_update_that_fails_to_build_keeps_the_old_chain():
+    effects = EffectsFilter([Gain(db=-6.0)])
+    await effects.start(RATE)
+    before = await effects.filter(AUDIO)
+    wide = FilterUpdateSettingsFrame(settings={"effects": [Biquad(kind="lowpass", hz=12000.0)]})
+
+    with pytest.raises(ValueError, match="effects: hz"):
+        await effects.process_frame(wide)
+
+    assert await effects.filter(AUDIO) == before
 
 
 async def test_an_update_payload_outside_a_sequence_names_the_effects_field():
@@ -47,13 +92,13 @@ async def test_a_chunk_of_0_samples_passes_through():
     assert await effects.filter(b"") == b""
 
 
-async def _updated(effects: EffectsFilter, chain: list) -> float:
-    """Updates one chain mid-stream, gives its largest step over 1 fade."""
-    audio = np.full(CHUNK, LEVEL, dtype=np.int16).tobytes()
-    before = await effects.filter(audio)
-    await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": chain}))
-    fading = await effects.filter(audio)
-    after = await effects.filter(audio)
+async def _updated(effects: EffectsFilter, *chains: Effects) -> float:
+    """Updates the chain once per given chain before one chunk, gives the largest step."""
+    before = await effects.filter(AUDIO)
+    for chain in chains:
+        await effects.process_frame(FilterUpdateSettingsFrame(settings={"effects": chain}))
+    fading = await effects.filter(AUDIO)
+    after = await effects.filter(AUDIO)
     return _step_db(before + fading + after)
 
 

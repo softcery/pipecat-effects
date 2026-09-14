@@ -40,13 +40,15 @@ CHAIN: Effects = (
     Saturation(drive=1.2, mix=0.15),
     Limiter(ceiling_db=-1.0, knee_db=3.0),
 )
+CHANNELS = 1
 
 
 def transport_params() -> TransportParams:
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_out_mixer=FilterMixer(EffectsFilter(CHAIN), channels=1),
+        audio_out_channels=CHANNELS,
+        audio_out_mixer=FilterMixer(EffectsFilter(CHAIN), channels=CHANNELS),
     )
 ```
 
@@ -99,11 +101,12 @@ Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.4 dBTP.
 
 ## Build a chain
 
-- A chain is any sequence of effects. The filter runs them in order.
+- A chain is any sequence of effects. The filter runs them in order and adds no stage.
 - Build one filter per session. Each effect holds its state across chunks.
 - Put `AGC` first. It reads the level before any stage changes it.
-- The filter appends `Limiter()` to a chain that ends elsewhere, so the int16 cast clips 0 samples.
-- `FilterMixer` takes the channel count of the transport params. `start` raises over 1 channel.
+- If a chain ends without `Limiter`, the int16 cast hard clips each sample over full scale. End
+  each chain with `Limiter`.
+- Give `FilterMixer` the `audio_out_channels` value as `channels`. `start` raises over 1 channel.
 - Each effect validates its values at build time. A value outside the range raises `ValueError`
   that names the field and the range.
 
@@ -166,38 +169,43 @@ await task.queue_frame(MixerEnableFrame(enable=False))
 await task.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=-3.0), Limiter())}))
 ```
 
-- `MixerEnableFrame(enable=False)` bypasses the chain. The audio passes unchanged.
-- `MixerUpdateSettingsFrame` with an `effects` key builds a new chain and crossfades over one
-  chunk.
-- The transport maps both to `FilterEnableFrame` and `FilterUpdateSettingsFrame`. Call
-  `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
+- `MixerEnableFrame(enable=False)` bypasses the chain. The filter gives the input, and the chain
+  keeps running on it, so envelopes and delay lines stay current.
+- `MixerUpdateSettingsFrame` with an `effects` key builds a new chain and swaps it in.
+- Each change fades over one chunk, from the output last heard to the new output. If 2 updates
+  arrive before one chunk, the first chain fades to the last chain.
+- `FilterMixer` maps the 2 mixer frames to `FilterEnableFrame` and `FilterUpdateSettingsFrame`.
+  Call `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
 - An `effects` value outside a sequence of effects raises `TypeError` that names the field.
+- A chain that fails to build raises `ValueError` that names the `effects` field. The old chain
+  keeps running.
 
 ## Meter
 
 ```python
-reading = mixer.read()  # {"lufs": -19.92, "dbtp": -1.04}, or {} on silence
+reading = mixer.read()  # Reading(lufs=-19.92, dbtp=-1.04), or None on silence
 ```
 
-- `EffectsFilter.meter.read()` gives a `Reading` with `lufs` and `dbtp` of the output since the
-  last read, then clears both.
+- `FilterMixer` meters each chunk it gives to the transport, after the int16 cast.
+- `FilterMixer.read()` gives a `Reading` with `lufs` and `dbtp` since the last read, then clears
+  both. Silence gives `None`.
 - `lufs` is the K-weighted loudness of ITU-R BS.1770. The published 48 kHz filter moves to the
   session rate by the bilinear transform. A 997 Hz sine at 0 dBFS reads -3.01 LUFS.
 - `dbtp` is the true peak, on 4 times oversampling with 48 taps.
-- `FilterMixer.read()` gives the same pair as a mapping, and gives no field on silence.
-- Both readings hold a floor of -120.0 dB.
+- `Meter` reads float chunks for any other caller. Its `read` gives the floor, -120.0 dB, in
+  place of `None`.
 
 ## Cost
 
-One chunk at 24 kHz, the 8 stage chain above, mean of 1000 chunks. Python 3.13.9, macOS arm64,
-commit 859e13c.
+One chunk at 24 kHz, the 8 stage chain above, mean of 1000 chunks, median of 4 runs. Python
+3.13.9, macOS arm64.
 
 | path | mean | 95th |
 | --- | --- | --- |
-| filter, 20 ms chunk | 0.190 ms | 0.215 ms |
-| mixer on silence, 10 ms chunk | 0.158 ms | 0.178 ms |
-| true peak, 10 ms chunk | 0.0103 ms | 0.0115 ms |
-| loudness and true peak, 10 ms chunk | 0.031 ms | 0.037 ms |
+| filter, 20 ms chunk | 0.143 ms | 0.158 ms |
+| mixer on silence with the meter, 10 ms chunk | 0.158 ms | 0.173 ms |
+| true peak, 10 ms chunk | 0.0106 ms | 0.0124 ms |
+| loudness and true peak, 10 ms chunk | 0.031 ms | 0.036 ms |
 
 `bench.py --out rows.jsonl --sha <commit>` writes one row.
 
@@ -208,6 +216,8 @@ commit 859e13c.
   defect is in pipecat, and it holds for every output mixer.
 - The chain runs on every chunk, silence included, so attack and release stay continuous through
   silence. One idle session costs 100 silent chunks a second.
+- A bypassed chain keeps running, so it costs the same as an active chain.
+- Outside a bypass, the chunk after an update runs the old chain and the new chain.
 - `AGC` reads momentary loudness without the gate of ITU-R BS.1770, the loudness standard. Under
   -50 LUFS the gain holds.
 - `AGC` sets the level at its place in the chain. Later stages move the output level. The EQ and
@@ -229,7 +239,8 @@ commit 859e13c.
 - A chunk of 0 samples passes through. The primitives need 1 sample or more.
 - `Reverb` takes `decay_ms` to 500. A hall reverb needs convolution, which is not included.
 - Pitch shift, formant shift, lookahead and convolution are not included.
-- `FilterMixer` goes away when pipecat takes an output filter field on `TransportParams`.
+- `FilterMixer` holds the meter. If pipecat takes an output filter field on `TransportParams`,
+  that field takes the filter alone. The reading then needs its own adapter or an observer.
 
 ## Develop
 

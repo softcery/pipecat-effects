@@ -55,7 +55,7 @@ async def _filter(rate: int) -> dict[str, float]:
 
 async def _idle(rate: int) -> dict[str, float]:
     """Gives cost of one silent chunk, chain at rest."""
-    mixer = FilterMixer(EffectsFilter(EQ_COMPRESSION))
+    mixer = FilterMixer(EffectsFilter(EQ_COMPRESSION), channels=1)
     await mixer.start(rate)
     silence = bytes(2 * int(rate * IDLE_MS / 1000.0))
     await mixer.mix(silence)

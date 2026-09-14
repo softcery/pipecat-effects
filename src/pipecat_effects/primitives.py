@@ -6,6 +6,7 @@ import cmath
 import math
 from collections.abc import Sequence
 from functools import cache
+from typing import Literal, get_args
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -14,8 +15,9 @@ from scipy.signal import sos2zpk, sosfilt, zpk2sos
 
 type Samples = NDArray[np.floating]
 type Roots = NDArray[np.complex128]
+type Kind = Literal["lowpass", "highpass", "bandpass", "peak", "lowshelf", "highshelf"]
 
-KINDS = ("lowpass", "highpass", "bandpass", "peak", "lowshelf", "highshelf")
+KINDS = get_args(Kind.__value__)  # get_args on the alias itself gives ()
 NYQUIST_RATIO = 0.45  # highest centre, as part of the rate
 BLOCK_MS = 1.0  # envelope step
 K_RATE = 48000  # rate of the published K-weighting sections
@@ -41,7 +43,7 @@ class Section:
 
     @classmethod
     def at(
-        cls, kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
+        cls, kind: Kind, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
     ) -> Section:
         """Gives one Audio EQ Cookbook section at this rate. A centre over the bound raises."""
         return cls(row(kind, rate=rate, hz=hz, q=q, gain_db=gain_db))
@@ -198,7 +200,7 @@ def _floor(db: float) -> float:
 
 
 def row(
-    kind: str, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
+    kind: Kind, *, rate: int, hz: float, q: float = 0.7071, gain_db: float = 0.0
 ) -> tuple[float, ...]:
     """Gives 6 coefficients of one section at this rate. A centre over its bound raises."""
     bound = NYQUIST_RATIO * rate
@@ -224,7 +226,7 @@ def _pole(ms: float, per_second: float) -> float:
 
 
 def _cookbook(
-    kind: str, *, w0: float, alpha: float, gain_db: float
+    kind: Kind, *, w0: float, alpha: float, gain_db: float
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Gives numerator and denominator of one kind."""
     cos = math.cos(w0)
