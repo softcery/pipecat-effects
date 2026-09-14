@@ -1,7 +1,7 @@
 # pipecat-effects
 
 Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One filter, 8 effects
-and one loudness meter. You build the chain. The chain is causal and adds 0 samples of latency.
+and one loudness meter. You build the chain. The chain adds 0 samples of latency.
 The package ships a `py.typed` marker.
 
 CI tests the package on `uv.lock` and on the lowest allowed pipecat-ai, numpy and scipy.
@@ -53,7 +53,7 @@ def transport_params() -> TransportParams:
 ```
 
 `examples/bot.py` runs one voice bot with that chain. It needs 4 pipecat extras and
-`OPENAI_API_KEY`.
+`OPENAI_API_KEY`. The wheel has no `examples/`, so run it from a clone of this repository.
 
 ```
 pip install pipecat-effects "pipecat-ai[runner,webrtc,openai,silero]"
@@ -91,7 +91,8 @@ https://github.com/user-attachments/assets/dcb91965-4ee8-4227-b445-88c6d366de87
 https://github.com/user-attachments/assets/e0a58689-c594-4ff4-8a63-84776262fd14
 
 100 Hz high-pass, de-esser, 4:1 compressor with 0.5 ms attack and 18 dB makeup, +4 dB at 3.5 kHz.
--16.3 LUFS, -1.4 dBTP. Against the unprocessed clip: +2.0 LU, and +3.7 dB from 2 to 4 kHz.
+-16.3 LUFS, -1.4 dBTP. Against the unprocessed clip: +2.0 LU, and +3.7 dB in the share of power
+from 2 to 4 kHz.
 
 ### Room
 
@@ -165,15 +166,16 @@ Change the chain at runtime with 2 stock frames.
 from pipecat.frames.frames import MixerEnableFrame, MixerUpdateSettingsFrame
 from pipecat_effects import Gain, Limiter
 
-await task.queue_frame(MixerEnableFrame(enable=False))
-await task.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=-3.0), Limiter())}))
+await worker.queue_frame(MixerEnableFrame(enable=False))
+await worker.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=-3.0), Limiter())}))
 ```
 
 - `MixerEnableFrame(enable=False)` bypasses the chain. The filter gives the input, and the chain
   keeps running on it, so envelopes and delay lines stay current.
 - `MixerUpdateSettingsFrame` with an `effects` key builds a new chain and swaps it in.
 - Each change fades over one chunk, from the output last heard to the new output. If 2 updates
-  arrive before one chunk, the first chain fades to the last chain.
+  arrive before one chunk, the chain last heard fades to the last chain. The chain between them
+  is not heard.
 - `FilterMixer` maps the 2 mixer frames to `FilterEnableFrame` and `FilterUpdateSettingsFrame`.
   Call `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
 - An `effects` value outside a sequence of effects raises `TypeError` that names the field.
@@ -197,7 +199,7 @@ reading = mixer.read()  # Reading(lufs=-19.92, dbtp=-1.04), or None on silence
 
 ## Cost
 
-One chunk at 24 kHz, the 8 stage chain above, mean of 1000 chunks, median of 4 runs. Python
+One chunk at 24 kHz, the 8 effect chain above, mean of 1000 chunks, median of 4 runs. Python
 3.13.9, macOS arm64.
 
 | path | mean | 95th |
@@ -212,10 +214,15 @@ One chunk at 24 kHz, the 8 stage chain above, mean of 1000 chunks, median of 4 r
 ## Limits
 
 - The filter runs on mono. `FilterMixer.start` raises on more than 1 channel.
-- A flush with an output mixer never goes quiet, so `flush_pipeline` waits out its caller. The
-  defect is in pipecat, and it holds for every output mixer.
-- The chain runs on every chunk, silence included, so attack and release stay continuous through
-  silence. One idle session costs 100 silent chunks a second.
+- With an output mixer, a flush that fails to drain does not time out. Each mixer chunk reaches
+  the pipeline sink and counts as progress. A flush that drains returns. The defect is in
+  pipecat 1.10.0 and holds for each output mixer.
+- The chain runs on each chunk, silence included, so attack and release stay continuous through
+  silence. At the stock `audio_out_10ms_chunks` of 4, one idle session costs 25 silent chunks of
+  40 ms a second.
+- `Compressor` and `DeEsser` set the gain of each 1 ms block from the peak of that block. `AGC`
+  sets one target per chunk from the loudness at the chunk end. Each gain reads ahead inside its
+  chunk, by up to 1 ms or 1 chunk.
 - A bypassed chain keeps running, so it costs the same as an active chain.
 - Outside a bypass, the chunk after an update runs the old chain and the new chain.
 - `AGC` reads momentary loudness without the gate of ITU-R BS.1770, the loudness standard. Under
@@ -228,12 +235,14 @@ One chunk at 24 kHz, the 8 stage chain above, mean of 1000 chunks, median of 4 r
   meter only reports.
 - The true peak meter cuts at the input Nyquist. At a 24 kHz rate it reads a 10 kHz sine 0.5 dB
   under its peak.
-- The K-weighting at 8 kHz differs from the standard by 0.12 dB at most from 100 Hz to 3 kHz. At
-  24 kHz it differs by 0.023 dB at most.
+- The K-weighting at 8 kHz differs from the standard by 0.43 dB at most from 100 Hz to 3 kHz. At
+  24 kHz it differs by 0.040 dB at most.
 - The package has no limiter with lookahead. The broadcast clip holds a peak-to-loudness ratio,
   true peak minus loudness, of 14.9 dB. The unprocessed clip holds 17.0 dB.
-- A `Biquad` centre over 0.45 of the sample rate raises at `start`, with the highest allowed
-  centre and the rate.
+- A `Biquad` or `DeEsser` centre over 0.45 of the sample rate raises at `start`, with the highest
+  allowed centre and the rate. The error names `hz`, not the effect.
+- At 8 kHz the highest centre is 3600 Hz. The chain in [Use](#use) raises there, since its
+  `DeEsser` sits at 6500 Hz.
 - One section falls 12 dB per octave. A lowpass at 6000 Hz drops an 8 kHz tone by 10.0 dB at a
   24 kHz rate.
 - A chunk of 0 samples passes through. The primitives need 1 sample or more.
