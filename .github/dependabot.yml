@@ -10,6 +10,7 @@ updates:
     groups:
       uv:
         patterns: ["*"]
+        exclude-patterns: ["pipecat-ai"]
 
   - package-ecosystem: github-actions
     directory: /

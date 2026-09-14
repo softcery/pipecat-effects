@@ -1,6 +1,7 @@
 .PHONY: lint test test-lowest audit
 
 lint:
+	uv lock --check
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run ty check

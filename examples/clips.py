@@ -111,7 +111,7 @@ def _clip(stem: Path, rate: int, audio: bytes) -> None:
 
 def _ffmpeg(*arguments: str | Path) -> None:
     """Runs ffmpeg quietly. A failure raises."""
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *map(str, arguments)], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *map(str, arguments)], check=True)  # noqa: S603, S607
 
 
 def _arguments() -> argparse.Namespace:

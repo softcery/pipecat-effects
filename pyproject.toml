@@ -12,9 +12,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio",
     "Typing :: Typed",
 ]
@@ -37,7 +34,7 @@ dev = [
 ]
 
 [tool.uv]
-required-version = ">=0.12.13"
+required-version = ">=0.12.13,<0.13"
 
 [tool.ruff]
 line-length = 100
@@ -47,15 +44,15 @@ src = ["src"]
 select = [
     "E", "W", "F", "I", "UP", "B",
     "SIM", "C4", "RUF", "PTH", "RET", "ASYNC", "T20", "ERA",
-    "S", "BLE", "A", "N", "PIE", "PERF", "FURB", "NPY", "PT", "PGH", "PLE", "PLW", "TRY004",
+    "S", "BLE", "A", "N", "PIE", "PERF", "FURB", "NPY", "PT", "PGH", "PLE", "PLW", "TRY",
 ]
+ignore = ["TRY003"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["pipecat_effects"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
-"examples/**" = ["S603", "S607"]
 
 [tool.pytest]
 asyncio_mode = "auto"

@@ -8,4 +8,4 @@
 - `Meter` with K-weighted loudness in LUFS and 4 times oversampled true peak in dBTP.
 - `FilterMixer` on `BaseAudioMixer`, so an output transport carries a filter today. It gives one
   channel guard and one reading per call of `read`.
-- A `py.typed` marker and a dev group with pytest, ruff and ty.
+- A `py.typed` marker.

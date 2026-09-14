@@ -4,7 +4,7 @@ Output audio effects for [pipecat](https://github.com/pipecat-ai/pipecat). One f
 and one loudness meter. You build the chain. The chain is causal and adds 0 samples of latency.
 The package ships a `py.typed` marker.
 
-Tested with pipecat-ai 1.10.0, numpy 2.5.3, scipy 1.18.1 on Python 3.13.9.
+CI tests the package on `uv.lock` and on the lowest allowed pipecat-ai, numpy and scipy.
 
 ## Install
 
@@ -223,6 +223,12 @@ commit 859e13c.
 - `Reverb` takes `decay_ms` to 500. A hall reverb needs convolution, which is not included.
 - Pitch shift, formant shift, lookahead and convolution are not included.
 - `FilterMixer` goes away when pipecat takes an output filter field on `TransportParams`.
+
+## Develop
+
+- `make lint` checks the lock, the format, the lint rules and the types.
+- `make test` runs the tests. `make test-lowest` runs them on the lowest allowed dependencies.
+- `make audit` checks `uv.lock` for known vulnerabilities.
 
 ## License
 
