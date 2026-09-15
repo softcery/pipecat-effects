@@ -1,3 +1,10 @@
+<div align="center">
+  <a href="https://github.com/pipecat-ai/pipecat">
+    <img alt="Pipecat" width="220px" height="auto" src="https://raw.githubusercontent.com/pipecat-ai/pipecat/main/pipecat.png">
+  </a>
+  <p><em>A <a href="https://docs.pipecat.ai/api-reference/server/services/audio-filters/pipecat-effects">community integration</a> for <a href="https://github.com/pipecat-ai/pipecat">Pipecat</a></em></p>
+</div>
+
 # pipecat-effects
 
 [![PyPI version](https://img.shields.io/pypi/v/pipecat-effects?cacheSeconds=3600)](https://pypi.org/project/pipecat-effects)
