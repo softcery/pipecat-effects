@@ -1,4 +1,4 @@
-.PHONY: lint test test-lowest audit
+.PHONY: lint test test-lowest audit build
 
 lint:
 	uv lock --check
@@ -15,3 +15,6 @@ test-lowest:
 
 audit:
 	uv audit --locked --preview-features audit-command
+
+build:
+	uv build

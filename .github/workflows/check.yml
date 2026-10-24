@@ -24,6 +24,7 @@ jobs:
           - target: lint
           - target: audit
           - target: test-lowest
+          - target: build
           - { target: test, python: "3.12" }
           - { target: test, python: "3.13" }
           - { target: test, python: "3.14" }
