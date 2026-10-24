@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2, 2026-10-24
+
+- The package takes `pipecat-ai>=1.14`, the first pipecat that allows Pillow 13. Pillow 13.0.0
+  fixes 41 advisories, 3 of them critical. No source change.
+- The package metadata lists Python 3.12, 3.13 and 3.14, the versions CI tests.
+
 ## 0.1.1, 2026-09-15
 
 - The filter refuses an odd byte count, and an update item whose `start` gives no callable, each

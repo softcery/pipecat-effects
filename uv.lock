@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1173,7 +1173,7 @@ wheels = [
 
 [[package]]
 name = "pipecat-effects"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1192,7 +1192,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=2.0" },
-    { name = "pipecat-ai", specifier = ">=1.10,<2" },
+    { name = "pipecat-ai", specifier = ">=1.14,<2" },
     { name = "scipy", specifier = ">=1.14" },
 ]
 

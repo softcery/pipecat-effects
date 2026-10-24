@@ -25,7 +25,7 @@ pip install pipecat-effects
 ## Use
 
 Pipecat 1.10.0 has no output filter field. `FilterMixer` runs the filter as the output mixer.
-Tested with pipecat 1.10.0 and 1.14.0.
+Tested with pipecat 1.14.0.
 
 ```python
 from pipecat.transports.base_transport import TransportParams
