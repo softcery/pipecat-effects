@@ -281,6 +281,8 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 - `make test` runs the tests. `make test-lowest` runs them on the lowest allowed pipecat-ai,
   numpy and scipy. CI runs both.
 - `make audit` checks `uv.lock` for known vulnerabilities.
+- `make build` builds the wheel and the sdist into `dist/`. CI runs it on each push to `main`.
+- A `v` tag that matches the project version publishes the package to PyPI.
 
 ## License
 
