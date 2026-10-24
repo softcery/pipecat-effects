@@ -1,8 +1,9 @@
 """One voice bot with a chain on its output. Run it with the pipecat runner.
 
 It needs pipecat-ai[runner,webrtc,openai,silero] and OPENAI_API_KEY. --chain picks one of the
-4 README chains. --bypass runs the session with the chain off. The log gives the loudness and
-the true peak of each bot turn.
+4 README chains. --bypass runs the session with the chain off. The chain runs as the output
+filter. --meter runs it in FilterMixer, and the log gives the loudness and the true peak of each
+bot turn.
 """
 
 import argparse
@@ -10,7 +11,7 @@ import os
 
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import MixerEnableFrame
+from pipecat.frames.frames import FilterEnableFrame, MixerEnableFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -38,9 +39,10 @@ LLM = "gpt-4.1-mini"
 
 async def bot(runner_args: RunnerArguments) -> None:
     """Runs one session. The filter processes each output chunk."""
-    args = runner_args.cli_args or argparse.Namespace(chain=CHAIN, bypass=False)
-    mixer = FilterMixer(EffectsFilter(CHAINS[args.chain]), channels=CHANNELS)
-    transport = await create_transport(runner_args, {"webrtc": lambda: params(mixer)})
+    args = runner_args.cli_args or argparse.Namespace(chain=CHAIN, bypass=False, meter=False)
+    effects = EffectsFilter(CHAINS[args.chain])
+    mixer = FilterMixer(effects, channels=CHANNELS) if args.meter else None
+    transport = await create_transport(runner_args, {"webrtc": lambda: params(effects, mixer)})
     key = os.environ["OPENAI_API_KEY"]
     context = LLMContext([{"role": "system", "content": PROMPT}])
     turn = LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer())
@@ -57,21 +59,23 @@ async def bot(runner_args: RunnerArguments) -> None:
         ]
     )
     worker = PipelineWorker(pipeline)
-    if worker.turn_tracking_observer is not None:
+    if mixer is not None and worker.turn_tracking_observer is not None:
         worker.turn_tracking_observer.add_event_handler("on_turn_ended", _metered(mixer))
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
     await runner.add_workers(worker)
     if args.bypass:
-        await worker.queue_frame(MixerEnableFrame(enable=False))
+        bypass = FilterEnableFrame if mixer is None else MixerEnableFrame
+        await worker.queue_frame(bypass(enable=False))
     await runner.run()
 
 
-def params(mixer: FilterMixer) -> TransportParams:
-    """Gives transport params with the chain on the output."""
+def params(effects: EffectsFilter, mixer: FilterMixer | None) -> TransportParams:
+    """Gives transport params with the chain on the output, in the mixer if there is one."""
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
         audio_out_channels=CHANNELS,
+        audio_out_filter=effects if mixer is None else None,
         audio_out_mixer=mixer,
     )
 
@@ -93,4 +97,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--chain", choices=CHAINS, default=CHAIN, help="the chain")
     parser.add_argument("--bypass", action="store_true", help="run with the chain off")
+    parser.add_argument("--meter", action="store_true", help="run in FilterMixer, log each turn")
     main(parser)

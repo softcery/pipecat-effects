@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The README puts `EffectsFilter` on `audio_out_filter`, the output filter field of pipecat 1.13
+  and later. `FilterMixer` stays for the meter and a `Reverb` tail. A table gives the 7
+  differences of the 2 paths. No source change.
+- `bot.py` runs the chain as the output filter. `--meter` runs it in `FilterMixer` and logs each
+  turn.
+- 3 tests run the filter on `audio_out_filter` of the stock output transport.
+
 ## 0.1.2, 2026-10-24
 
 - The package takes `pipecat-ai>=1.14`, the first pipecat that allows Pillow 13. Pillow 13.0.0

@@ -24,8 +24,8 @@ pip install pipecat-effects
 
 ## Use
 
-Pipecat 1.10.0 has no output filter field. `FilterMixer` runs the filter as the output mixer.
-Tested with pipecat 1.14.0.
+`EffectsFilter` is a pipecat audio filter. Give it to `audio_out_filter`, the output filter field
+of pipecat 1.13 and later. Tested with pipecat 1.14.0.
 
 ```python
 from pipecat.transports.base_transport import TransportParams
@@ -36,7 +36,6 @@ from pipecat_effects import (
     DeEsser,
     Effects,
     EffectsFilter,
-    FilterMixer,
     Limiter,
     Saturation,
 )
@@ -51,15 +50,13 @@ CHAIN: Effects = (
     Saturation(drive=1.2, mix=0.15),
     Limiter(ceiling_db=-1.0, knee_db=3.0),
 )
-CHANNELS = 1
 
 
 def transport_params() -> TransportParams:
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_out_channels=CHANNELS,
-        audio_out_mixer=FilterMixer(EffectsFilter(CHAIN), channels=CHANNELS),
+        audio_out_filter=EffectsFilter(CHAIN),
     )
 ```
 
@@ -71,7 +68,36 @@ uv run --with "pipecat-ai[runner,webrtc,openai,silero]" examples/bot.py --chain 
 ```
 
 `--chain` picks one of the 4 chains in [Listen](#listen). `--bypass` runs the session with the
-chain off. The log gives the loudness and the true peak of each bot turn.
+chain off. `--meter` runs the chain in `FilterMixer`, and the log gives the loudness and the true
+peak of each bot turn.
+
+### Filter or mixer
+
+`FilterMixer` runs the same filter as the output mixer. It adds the [meter](#meter), and the chain
+runs through silence.
+
+```python
+from pipecat_effects import FilterMixer
+
+TransportParams(
+    audio_in_enabled=True,
+    audio_out_enabled=True,
+    audio_out_channels=1,
+    audio_out_mixer=FilterMixer(EffectsFilter(CHAIN), channels=1),
+)
+```
+
+| | `audio_out_filter` | `FilterMixer` |
+| --- | --- | --- |
+| audio the chain runs on | bot audio | each output chunk, silence included |
+| `Reverb` tail | stops at the last bot chunk | rings out in silence |
+| `audio_out_volume`, `VolumeFrame` | after the chain, past `Limiter` | before the chain |
+| meter | none | `FilterMixer.read()` |
+| control frames | `FilterEnableFrame`, `FilterUpdateSettingsFrame` | `MixerEnableFrame`, `MixerUpdateSettingsFrame` |
+| idle cost | none | 25 silent chunks a second |
+| a flush that fails to drain | no mixer chunk keeps it alive | holds, see [Pipecat](#pipecat) |
+
+Pick `audio_out_filter` unless you need the meter or a `Reverb` tail.
 
 ## Listen
 
@@ -120,7 +146,7 @@ Schroeder reverb, 400 ms decay, 0.3 mix. -21.2 LUFS, -3.5 dBTP.
 - Put `AGC` first. It reads the level before any stage changes it.
 - If a chain ends without `Limiter`, the int16 cast hard clips each sample over full scale. End
   each chain with `Limiter`.
-- Give `FilterMixer` the `audio_out_channels` value as `channels`. `start` raises over 1 channel.
+- Keep `audio_out_channels` at 1, the default. Give `FilterMixer` that value as `channels`.
 - Each effect validates its values at build time. A value outside the range raises `ValueError`
   that names the field and the range.
 
@@ -174,21 +200,26 @@ Method of each effect:
 Change the chain at runtime with 2 stock frames.
 
 ```python
-from pipecat.frames.frames import MixerEnableFrame, MixerUpdateSettingsFrame
+from pipecat.frames.frames import FilterEnableFrame, FilterUpdateSettingsFrame
 from pipecat_effects import Gain, Limiter
 
-await worker.queue_frame(MixerEnableFrame(enable=False))
-await worker.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=-3.0), Limiter())}))
+await worker.queue_frame(FilterEnableFrame(enable=False))
+await worker.queue_frame(
+    FilterUpdateSettingsFrame(settings={"effects": (Gain(db=-3.0), Limiter())})
+)
 ```
 
-- `MixerEnableFrame(enable=False)` bypasses the chain. The filter gives the input, and the chain
+- `FilterEnableFrame(enable=False)` bypasses the chain. The filter gives the input, and the chain
   keeps running on it, so envelopes and delay lines stay current.
-- `MixerUpdateSettingsFrame` with an `effects` key builds a new chain and swaps it in.
+- `FilterUpdateSettingsFrame` with an `effects` key builds a new chain and swaps it in.
 - Each change fades over one chunk, from the output last heard to the new output. If 2 updates
   arrive before one chunk, the chain last heard fades to the last chain. The chain between them
   is not heard.
-- `FilterMixer` maps the 2 mixer frames to `FilterEnableFrame` and `FilterUpdateSettingsFrame`.
-  Call `EffectsFilter.process_frame` with those 2 frames when you hold the filter directly.
+- The output transport passes the 2 frames to `audio_out_filter`, in order with the audio.
+- With `FilterMixer`, send `MixerEnableFrame` and `MixerUpdateSettingsFrame` with the same
+  fields. `FilterMixer` maps them to the 2 filter frames. The transport gives filter frames to
+  `audio_out_filter` only.
+- Call `EffectsFilter.process_frame` with the 2 filter frames when you hold the filter directly.
 - An `effects` value outside a sequence of effects raises `TypeError` that names the field. An
   item whose `start` gives no callable raises `TypeError` that names the field and the index.
 - A chain that fails to build raises `ValueError` that names the `effects` field. The old chain
@@ -202,6 +233,7 @@ await worker.queue_frame(MixerUpdateSettingsFrame(settings={"effects": (Gain(db=
 reading = mixer.read()  # Reading(lufs=-19.92, dbtp=-1.04), or None on silence
 ```
 
+- The meter runs in `FilterMixer`. On `audio_out_filter` there is no reading.
 - `FilterMixer` meters each chunk it gives to the transport, after the int16 cast.
 - `FilterMixer.read()` gives a `Reading` with `lufs` and `dbtp` since the last read, then clears
   both. Silence gives `None`.
@@ -229,10 +261,17 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 
 ### Chain
 
-- The filter runs on mono. `FilterMixer.start` raises on more than 1 channel.
-- The chain runs on each chunk, silence included, so attack and release stay continuous through
-  silence. At the stock `audio_out_10ms_chunks` of 4, one idle session costs 25 silent chunks of
-  40 ms a second, 7.9 ms of compute a second on the [Cost](#cost) machine.
+- The filter runs on mono. `FilterMixer.start` raises on more than 1 channel. A filter gets no
+  channel count, so on `audio_out_filter` stereo output runs through the chain as one
+  interleaved signal, without an error.
+- In `FilterMixer` the chain runs on each chunk, silence included, so attack and release stay
+  continuous through silence. At the stock `audio_out_10ms_chunks` of 4, one idle session costs
+  25 silent chunks of 40 ms a second, 7.9 ms of compute a second on the [Cost](#cost) machine.
+- On `audio_out_filter` the chain runs on bot audio only. Each effect holds its state over the
+  gap between turns, and a `Reverb` tail stops at the last bot chunk.
+- On `audio_out_filter` pipecat applies `audio_out_volume` and `VolumeFrame` after the chain. A
+  volume over 1 drives the output past the `Limiter` ceiling. At a volume of 4 a chain that ends
+  in a -1 dB `Limiter` writes full scale. In `FilterMixer` the volume comes before the chain.
 - A bypassed chain keeps running, so it costs the same as an active chain.
 - Outside a bypass, the chunk after an update runs the old chain and the new chain.
 - A chunk of 0 samples passes through. An odd byte count raises `ValueError` that names `audio`.
@@ -270,8 +309,8 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 ### Pipecat
 
 - With an output mixer, a flush that fails to drain does not time out. Each mixer chunk reaches
-  the pipeline sink and counts as progress. A flush that drains returns. The defect is in
-  pipecat 1.10.0 and holds for each output mixer.
+  the pipeline sink and counts as progress. A flush that drains returns. The defect holds in
+  pipecat 1.14.0 for each output mixer. `audio_out_filter` needs no mixer.
 
 ## Develop
 
