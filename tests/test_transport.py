@@ -36,17 +36,24 @@ class Sink(BaseOutputTransport):
         return True
 
 
-def tone() -> OutputAudioRawFrame:
+def tone(destination: str | None = None) -> OutputAudioRawFrame:
     t = np.arange(CHUNK) / RATE
     audio = (LEVEL * np.sin(2 * np.pi * 440.0 * t)).astype(np.int16).tobytes()
-    return OutputAudioRawFrame(audio=audio, sample_rate=RATE, num_channels=1)
+    frame = OutputAudioRawFrame(audio=audio, sample_rate=RATE, num_channels=1)
+    frame.transport_destination = destination
+    return frame
 
 
-async def written(effects: EffectsFilter, frames: list[Frame]) -> list[int]:
+async def written(
+    effects: EffectsFilter, frames: list[Frame], destinations: list[str] | None = None
+) -> list[int]:
     """Gives the peak of each audio chunk the transport writes, end silence excluded."""
     sink = Sink(
         TransportParams(
-            audio_out_enabled=True, audio_out_sample_rate=RATE, audio_out_filter=effects
+            audio_out_enabled=True,
+            audio_out_sample_rate=RATE,
+            audio_out_filter=effects,
+            audio_out_destinations=destinations or [],
         )
     )
     await run_test(
@@ -78,3 +85,9 @@ async def test_a_filter_update_settings_frame_swaps_the_chain():
 
     assert peaks[0] == 4009
     assert peaks[2] == 2010
+
+
+async def test_audio_for_another_destination_skips_the_filter():
+    peaks = await written(EffectsFilter([Gain(db=-6.0)]), [tone("side")], destinations=["side"])
+
+    assert peaks == [LEVEL]
