@@ -68,8 +68,8 @@ uv run --with "pipecat-ai[runner,webrtc,openai,silero]" examples/bot.py --chain 
 ```
 
 `--chain` picks one of the 4 chains in [Listen](#listen). `--bypass` runs the session with the
-chain off. `--meter` runs the chain in `FilterMixer`, and the log gives the loudness and the true
-peak of each bot turn.
+chain off. A chain with `Reverb` runs in `FilterMixer`, so its tail rings out. `--meter` runs any
+chain in `FilterMixer`, and the log gives the loudness and the true peak of each bot turn.
 
 ### Filter or mixer
 
@@ -95,9 +95,11 @@ TransportParams(
 | meter | none | `FilterMixer.read()` |
 | control frames | `FilterEnableFrame`, `FilterUpdateSettingsFrame` | `MixerEnableFrame`, `MixerUpdateSettingsFrame` |
 | idle cost | none | 25 silent chunks a second |
+| `audio_out_destinations` | default destination only | one `FilterMixer` per destination |
 | a flush that fails to drain | no mixer chunk keeps it alive | holds, see [Pipecat](#pipecat) |
 
-Pick `audio_out_filter` unless you need the meter or a `Reverb` tail.
+Pick `audio_out_filter` unless you need the meter, a `Reverb` tail or a chain on another
+destination.
 
 ## Listen
 
@@ -272,6 +274,9 @@ One 40 ms chunk at 24 kHz, the stock output chunk of pipecat. The 8 effect chain
 - On `audio_out_filter` pipecat applies `audio_out_volume` and `VolumeFrame` after the chain. A
   volume over 1 drives the output past the `Limiter` ceiling. At a volume of 4 a chain that ends
   in a -1 dB `Limiter` writes full scale. In `FilterMixer` the volume comes before the chain.
+- `audio_out_filter` runs on the default destination only. Audio for a destination in
+  `audio_out_destinations` skips the chain. `audio_out_mixer` takes a mapping of destination to
+  mixer, so each destination can get its own `FilterMixer`.
 - A bypassed chain keeps running, so it costs the same as an active chain.
 - Outside a bypass, the chunk after an update runs the old chain and the new chain.
 - A chunk of 0 samples passes through. An odd byte count raises `ValueError` that names `audio`.

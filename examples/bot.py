@@ -2,8 +2,8 @@
 
 It needs pipecat-ai[runner,webrtc,openai,silero] and OPENAI_API_KEY. --chain picks one of the
 4 README chains. --bypass runs the session with the chain off. The chain runs as the output
-filter. --meter runs it in FilterMixer, and the log gives the loudness and the true peak of each
-bot turn.
+filter. A chain with Reverb runs in FilterMixer, so its tail rings out after each turn. --meter
+runs any chain in FilterMixer, and the log gives the loudness and the true peak of each bot turn.
 """
 
 import argparse
@@ -29,7 +29,7 @@ from pipecat.transports.base_transport import TransportParams
 from pipecat.workers.runner import WorkerRunner
 
 from chains import CHAINS
-from pipecat_effects import EffectsFilter, FilterMixer
+from pipecat_effects import Effects, EffectsFilter, FilterMixer, Reverb
 
 PROMPT = "You are a voice assistant. Answer in one short sentence."
 CHANNELS = 1
@@ -40,8 +40,9 @@ LLM = "gpt-4.1-mini"
 async def bot(runner_args: RunnerArguments) -> None:
     """Runs one session. The filter processes each output chunk."""
     args = runner_args.cli_args or argparse.Namespace(chain=CHAIN, bypass=False, meter=False)
-    effects = EffectsFilter(CHAINS[args.chain])
-    mixer = FilterMixer(effects, channels=CHANNELS) if args.meter else None
+    chain = CHAINS[args.chain]
+    effects = EffectsFilter(chain)
+    mixer = FilterMixer(effects, channels=CHANNELS) if args.meter or _tailed(chain) else None
     transport = await create_transport(runner_args, {"webrtc": lambda: params(effects, mixer)})
     key = os.environ["OPENAI_API_KEY"]
     context = LLMContext([{"role": "system", "content": PROMPT}])
@@ -59,7 +60,7 @@ async def bot(runner_args: RunnerArguments) -> None:
         ]
     )
     worker = PipelineWorker(pipeline)
-    if mixer is not None and worker.turn_tracking_observer is not None:
+    if mixer is not None and args.meter and worker.turn_tracking_observer is not None:
         worker.turn_tracking_observer.add_event_handler("on_turn_ended", _metered(mixer))
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
     await runner.add_workers(worker)
@@ -78,6 +79,11 @@ def params(effects: EffectsFilter, mixer: FilterMixer | None) -> TransportParams
         audio_out_filter=effects if mixer is None else None,
         audio_out_mixer=mixer,
     )
+
+
+def _tailed(chain: Effects) -> bool:
+    """Tells whether the chain holds a Reverb, whose tail needs the silence a mixer gives."""
+    return any(isinstance(effect, Reverb) for effect in chain)
 
 
 def _metered(mixer: FilterMixer):
