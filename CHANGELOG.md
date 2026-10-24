@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3, 2026-10-24
 
 - The README puts `EffectsFilter` on `audio_out_filter`, the output filter field of pipecat 1.13
   and later. `FilterMixer` stays for the meter and a `Reverb` tail. A table gives the 8
