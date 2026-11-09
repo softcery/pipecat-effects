@@ -1139,7 +1139,7 @@ wheels = [
 
 [[package]]
 name = "pipecat-ai"
-version = "1.14.0"
+version = "1.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1166,9 +1166,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b4/88/4fde6c32417a54ef7623739c41d2a2bec5a1f0452d5b1d22cf3635017601/pipecat_ai-1.14.0.tar.gz", hash = "sha256:2535140066a6a540c9f9e11996c79c94c3bdc1304f9303b39298e6e1ecdea34e", size = 12927496, upload-time = "2026-10-24T01:24:19.438Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/43/2582a64574f600c1371a19238c4f3d79123eb21ee5a9df8d3c846b928fec/pipecat_ai-1.15.0.tar.gz", hash = "sha256:c058dab4ad01165184795122e4078b207ad600cdb463122f4d4b6fadadc23b8f", size = 13043384, upload-time = "2026-10-29T05:50:41.856Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/31/29c72ca8d3a16b59fd12580fcb99a7cef641d9ee07fe7b0321c1b65ca3cf/pipecat_ai-1.14.0-py3-none-any.whl", hash = "sha256:0352f504b44e78bdf524e45af4bc759601c835b9b7dc195efe5e03384b974a44", size = 12109725, upload-time = "2026-10-24T01:24:16.112Z" },
+    { url = "https://files.pythonhosted.org/packages/92/9f/e9bac295d146f07d93943dc385a6ba9b299ce2f54081749361fc243e0839/pipecat_ai-1.15.0-py3-none-any.whl", hash = "sha256:e3c004bef6003567f4b20d098bce5129c1f17554ac44aabad3f7755d613d8815", size = 12230944, upload-time = "2026-10-29T05:50:38.647Z" },
 ]
 
 [[package]]
